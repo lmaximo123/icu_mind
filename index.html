@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ICU-Mind | Copiloto Preditivo de UTI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js" defer></script>
+  <script src="/clinical-scores.js" defer></script>
+  <script src="/score-ui.js" defer></script>
+  <script src="/app.js" defer></script>
+  <style>
+    body { background-color: #0b0f19; transition: background-color .3s ease; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; }
+    [hidden] { display: none !important; }
+    button, [role="button"] { touch-action: manipulation; }
+    button:focus-visible, [role="button"]:focus-visible { outline: 2px solid #818cf8; outline-offset: 3px; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    textarea, input { max-width: 100%; }
+    .glass-card { background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255, 255, 255, 0.1); }
+  </style>
+</head>
+<body id="main-body" class="p-4 md:p-6 min-h-screen">
+
+  <!-- HEADER / SELEÇÃO DE LEITOS -->
+  <header class="glass-card rounded-2xl p-4 mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
+    <div class="flex items-center gap-3">
+      <div id="status-indicator" class="p-2 bg-slate-600 rounded-xl">
+        <i data-lucide="activity" class="w-6 h-6 text-white"></i>
+      </div>
+      <div>
+        <h1 class="text-xl font-bold bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">
+          ICU-Mind | Copiloto Preditivo
+        </h1>
+        <p class="text-xs text-slate-400">Entrada multimodal • Revisão clínica • Triagem manual</p>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2 text-xs" aria-label="Triagem manual">
+      <span id="severity-badge" role="status" class="text-slate-300">Sem triagem</span>
+      <button data-severity="stable" onclick="setSeverity('stable')" class="px-2 py-1 rounded-lg bg-emerald-600/30 text-emerald-300">Estável</button>
+      <button data-severity="warning" onclick="setSeverity('warning')" class="px-2 py-1 rounded-lg bg-amber-600/30 text-amber-300">Atenção</button>
+      <button data-severity="critical" onclick="setSeverity('critical')" class="px-2 py-1 rounded-lg bg-red-600/30 text-red-300">Crítico</button>
+    </div>
+    <!-- SELETOR DE 10 LEITOS -->
+    <div class="flex items-center gap-2 overflow-x-auto max-w-full pb-2 md:pb-0">
+      <span class="text-xs text-slate-400 font-semibold uppercase mr-2">Leitos:</span>
+<button type="button" data-bed="01" onclick="selectBed('01', this)" aria-pressed="true" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-indigo-600 text-white font-bold">L01</button>
+<button type="button" data-bed="02" onclick="selectBed('02', this)" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L02</button>
+<button type="button" data-bed="03" onclick="selectBed('03', this)" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L03</button>
+<button type="button" data-bed="04" onclick="selectBed('04', this)" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L04</button>
+<button type="button" data-bed="05" onclick="selectBed('05', this)" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L05</button>
+<button type="button" data-bed="06" onclick="selectBed('06', this)" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L06</button>
+<button type="button" data-bed="07" onclick="selectBed('07', this)" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L07</button>
+<button type="button" data-bed="08" onclick="selectBed('08', this)" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L08</button>
+<button type="button" data-bed="09" onclick="selectBed('09', this)" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L09</button>
+<button type="button" data-bed="10" onclick="selectBed('10', this)" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L10</button>
+
+    </div>
+  </header>
+
+  <!-- PAINEL PRINCIPAL -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <!-- COLUNA 1 & 2: ENTRADA DE DADOS E ROUND -->
+    <div class="lg:col-span-2 space-y-6">
+
+      <div class="glass-card rounded-2xl p-4 text-xs text-slate-400 flex flex-col gap-3">
+        <div><strong id="active-bed" class="text-indigo-300">Leito 01</strong> · Salvamento automático local ativo. Os registros ficam neste navegador/dispositivo; não há sincronização entre aparelhos nesta versão.</div>
+        <div class="flex flex-wrap items-center gap-3">
+          <span id="persistence-status" role="status" class="text-emerald-300">Preparando armazenamento seguro…</span>
+          <button type="button" onclick="exportBackup()" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200">Exportar backup</button>
+          <label class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 cursor-pointer">Importar backup<input id="backup-file" type="file" accept="application/json,.json" class="hidden" onchange="importBackup(this.files[0]); this.value=''"></label>
+        </div>
+        <p class="text-amber-200">Use apenas dados fictícios ou desidentificados enquanto não houver autenticação, sincronização em nuvem e validação institucional de privacidade.</p>
+      </div>
+
+      <!-- MÓDULO DE GRAVAÇÃO DO ROUND -->
+      <div class="glass-card rounded-2xl p-5 border-l-4 border-l-cyan-500">
+        <div class="flex justify-between items-center mb-4">
+          <div class="flex items-center gap-2">
+            <i data-lucide="mic" class="w-5 h-5 text-cyan-400"></i>
+            <h2 class="font-bold text-slate-200">Captura de Áudio do Round (Ambient Speech)</h2>
+          </div>
+          <span id="rec-status" class="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-slate-500"></span> Standby
+          </span>
+        </div>
+
+        <div class="flex gap-3">
+          <button id="btn-round" onclick="toggleRoundRecording()" class="flex-1 py-3 px-4 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition">
+            <i data-lucide="disc" class="w-4 h-4"></i>
+            <span>Iniciar Gravação do Round</span>
+          </button>
+          <button onclick="generateHandover()" class="py-3 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition">
+            <i data-lucide="file-text" class="w-4 h-4"></i>
+            <span>Gerar Passagem de Plantão</span>
+          </button>
+        </div>
+        <p class="mt-3 text-xs text-slate-400">Gravação local com permissão do microfone, sem transcrição automática.</p>
+        <div id="recording-result" hidden class="mt-3 space-y-2">
+          <audio id="round-audio" controls class="w-full"></audio>
+          <a id="download-audio" class="text-xs text-cyan-300 underline">Baixar áudio do round</a>
+        </div>
+      </div>
+
+      <!-- ABAS DE UPLOAD POR CATEGORIA E DATA -->
+      <div class="glass-card rounded-2xl p-5">
+        <h2 class="text-sm font-bold mb-4">Entrada de Dados Multimodal · Foto/OCR + Redação Manual</h2>
+        <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-3 overflow-x-auto">
+          <div class="flex gap-2" role="tablist" aria-label="Categorias clínicas">
+            <button type="button" id="tab-vm" role="tab" data-tab="vm" aria-controls="category-panel" aria-selected="true" tabindex="0" onclick="switchTab('vm')" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white">Ventilação / Gaso</button>
+            <button type="button" id="tab-vitals" role="tab" data-tab="vitals" aria-controls="category-panel" aria-selected="false" tabindex="-1" onclick="switchTab('vitals')" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-400">Sinais Vitais</button>
+            <button type="button" id="tab-fluid" role="tab" data-tab="fluid" aria-controls="category-panel" aria-selected="false" tabindex="-1" onclick="switchTab('fluid')" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-400">Balanço Hídrico</button>
+            <button type="button" id="tab-infusions" role="tab" data-tab="infusions" aria-controls="category-panel" aria-selected="false" tabindex="-1" onclick="switchTab('infusions')" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-400">Infusões / DVA</button>
+            <button type="button" id="tab-invasive" role="tab" data-tab="invasive" aria-controls="category-panel" aria-selected="false" tabindex="-1" onclick="switchTab('invasive')" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-400">Invasões & Suporte</button>
+          </div>
+        </div>
+
+        <section id="category-panel" role="tabpanel" aria-labelledby="tab-vm" tabindex="0" class="mb-4 p-4 rounded-xl bg-slate-900/60 border border-slate-800">
+          <h3 id="category-title" class="text-sm font-bold text-slate-200"></h3>
+          <p id="category-description" class="text-xs text-slate-400 mt-2"></p>
+          <p class="text-xs text-slate-500 mt-2">Importe um relatório ou digite as observações desta categoria abaixo.</p>
+        </section>
+
+        <!-- CAMPO DE DATA -->
+        <div class="flex items-center gap-3 mb-4 bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
+          <i data-lucide="calendar" class="w-4 h-4 text-indigo-400"></i>
+          <label for="data-registro" class="text-xs text-slate-400">Data do Registro:</label>
+          <input type="datetime-local" id="data-registro" class="bg-slate-800 text-xs text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700 outline-none focus:border-indigo-500">
+        </div>
+
+        <!-- ÁREA DE UPLOAD PASSIVO -->
+        <div id="upload-zone" role="button" tabindex="0" aria-label="Selecionar imagem do relatório" class="border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-xl p-6 text-center transition cursor-pointer bg-slate-900/30">
+          <i data-lucide="upload-cloud" class="w-10 h-10 text-indigo-400 mx-auto mb-2"></i>
+          <p class="text-sm font-medium text-slate-300">Arraste a foto do relatório ou clique para fazer upload</p>
+          <p class="text-xs text-slate-500 mt-1">JPG, PNG ou WebP até 10 MB. O OCR inicia automaticamente e atualiza os escores. Confira o texto reconhecido.</p>
+
+        </div>
+
+        <input type="file" accept="image/jpeg,image/png,image/webp" class="hidden" id="file-upload" onchange="previewReport(this.files[0])">
+        <p id="upload-status" role="status" class="mt-3 text-xs text-slate-400"></p>
+        <img id="report-preview" hidden alt="Pré-visualização do relatório selecionado" class="mt-3 max-h-80 rounded-xl object-contain mx-auto">
+
+        <div class="mt-3 flex flex-wrap gap-2 items-center">
+          <button id="ocr-button" disabled onclick="processarFotoOCR()" class="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs">Extrair texto da imagem</button>
+          <span class="text-xs text-slate-500">O OCR pode errar números, unidades e nomes.</span>
+        </div>
+        <label for="ocr-text" class="block text-xs text-slate-400 mt-4 mb-2">Texto extraído · revise antes de usar</label>
+        <textarea id="ocr-text" rows="4" class="w-full bg-slate-900/80 text-xs p-3 rounded-xl border border-slate-700" placeholder="O texto reconhecido aparece aqui e alimenta os cálculos automaticamente."></textarea>
+        <button id="apply-ocr" onclick="applyOCR()" class="mt-2 px-3 py-2 text-xs rounded-lg bg-slate-800 hover:bg-slate-700">Adicionar texto revisado às notas</button>
+        <label for="manual-text-input" class="block text-xs text-slate-400 mt-4 mb-2">Redação manual / Notas da categoria</label>
+        <textarea id="manual-text-input" rows="4" class="w-full bg-slate-900/80 text-xs p-3 rounded-xl border border-slate-700" placeholder="Ex.: idade: 70; sexo: masculino; peso: 70 kg; creatinina: 1,2 mg/dL"></textarea>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4 text-xs">
+          <label for="hpp-input">História patológica pregressa (HPP)<textarea id="hpp-input" rows="3" class="mt-2 w-full bg-slate-900/80 p-3 rounded-xl border border-slate-700"></textarea></label>
+          <label for="hda-input">História da doença atual (HDA)<textarea id="hda-input" rows="3" class="mt-2 w-full bg-slate-900/80 p-3 rounded-xl border border-slate-700"></textarea></label>
+        </div>
+        <label for="plan-input" class="block mt-4 text-xs">Plano informado pela equipe</label>
+        <textarea id="plan-input" rows="2" class="mt-2 w-full bg-slate-900/80 text-xs p-3 rounded-xl border border-slate-700" placeholder="Registre o plano definido pela equipe assistente."></textarea>
+        <div class="mt-4 p-3 bg-slate-900/60 rounded-xl border border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+          <label>Peso extraído (kg)<input id="input-weight" readonly aria-label="Peso extraído" type="number" min="1" max="500" step="0.1" oninput="recalcularFarmaco()" class="mt-2 w-full bg-slate-800 p-2 rounded-lg" placeholder="—"></label>
+          <label>ClCr calculado (mL/min)<input id="input-crcl" readonly aria-label="ClCr calculado" type="number" min="0" step="0.1" oninput="recalcularFarmaco();recalcularAnticoagulation()" class="mt-2 w-full bg-slate-800 p-2 rounded-lg" placeholder="—"></label>
+          <label>HAS-BLED<input id="input-hasbled" readonly aria-label="HAS-BLED calculado" type="number" min="0" max="9" step="1" oninput="recalcularAnticoagulation()" class="mt-2 w-full bg-slate-800 p-2 rounded-lg" placeholder="—"></label>
+          <label>CHA₂DS₂-VASc<input id="input-chads" readonly aria-label="CHA₂DS₂-VASc calculado" type="number" min="0" max="9" step="1" oninput="recalcularAnticoagulation()" class="mt-2 w-full bg-slate-800 p-2 rounded-lg" placeholder="—"></label>
+        </div>
+        <p id="input-status" role="status" class="text-xs text-amber-300 mt-2"></p>
+        <button onclick="processarDadosCompletos()" class="mt-4 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-medium">Processar dados e atualizar passagem</button>
+
+        <!-- MÓDULO ESPECIAL: INVASÕES E SUPORTE AVANÇADO (SUGESTÕES) -->
+        <div id="invasive-suggestions" hidden class="mt-4 p-4 bg-slate-900/60 rounded-xl border border-slate-800">
+          <h4 class="text-xs font-bold text-slate-300 uppercase mb-2 flex items-center gap-1.5">
+            <i data-lucide="shield-alert" class="w-4 h-4 text-amber-400"></i>
+            Dispositivos e suporte informados pela equipe
+          </h4>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+            <label class="flex items-center gap-2 p-2 bg-slate-800 rounded-lg cursor-pointer"><input type="checkbox" class="accent-indigo-500"> ECMO V-A / V-V</label>
+            <label class="flex items-center gap-2 p-2 bg-slate-800 rounded-lg cursor-pointer"><input type="checkbox" class="accent-indigo-500"> Impella / LVAD</label>
+            <label class="flex items-center gap-2 p-2 bg-slate-800 rounded-lg cursor-pointer"><input type="checkbox" class="accent-indigo-500"> Cateter Swan-Ganz</label>
+            <label class="flex items-center gap-2 p-2 bg-slate-800 rounded-lg cursor-pointer"><input type="checkbox" class="accent-indigo-500"> Cateter PICCO</label>
+            <label class="flex items-center gap-2 p-2 bg-slate-800 rounded-lg cursor-pointer"><input type="checkbox" class="accent-indigo-500"> Hemodiálise / DAE</label>
+            <label class="flex items-center gap-2 p-2 bg-slate-800 rounded-lg cursor-pointer"><input type="checkbox" class="accent-indigo-500"> PAM / PVC Invasiva</label>
+          </div>
+        </div>
+      </div>
+
+      <section id="automatic-scores" class="glass-card rounded-2xl p-5 border-t-2 border-indigo-400">
+        <div class="flex flex-wrap gap-2 justify-between items-start mb-3">
+          <h3 class="font-bold text-sm">Escores automáticos · Leito <span id="score-bed">01</span></h3>
+          <span id="score-status" role="status" class="text-xs text-slate-400"></span>
+        </div>
+        <p class="text-xs text-slate-400 leading-relaxed mb-4">Digite ou cole dados nas notas, HPP ou HDA, ou envie uma imagem. Os resultados atualizam automaticamente. Exames isolados não completam todos os escores: dados ausentes, ambíguos ou conflitantes aparecem como pendências. Revise valores e unidades reconhecidos antes de usar.</p>
+        <div id="score-results" class="space-y-3" aria-label="Resultados dos escores"></div>
+        <details class="mt-4 p-3 rounded-xl bg-slate-900/60 border border-slate-700">
+          <summary class="cursor-pointer text-xs text-indigo-300">Conferir dados extraídos e corrigir informações</summary>
+          <p class="text-xs text-slate-400 mt-3">Correções valem para este texto e leito. Alterar o texto reinicia as correções para evitar resultados antigos. Use os extremos corretos de cada janela; valores conflitantes não são escolhidos automaticamente.</p>
+          <label for="score-add-field" class="block text-xs mt-3 mb-2">Revisar ou acrescentar um dado</label>
+          <select id="score-add-field" class="w-full bg-slate-800 p-2 rounded-lg text-xs"><option value="">Selecione uma informação…</option></select>
+          <div id="score-extracted" class="space-y-3 mt-3"></div>
+        </details>
+        <details class="mt-3 p-3 rounded-xl bg-slate-900/60 border border-slate-700 text-xs">
+          <summary class="cursor-pointer text-indigo-300">Formato aceito, janelas temporais e referências</summary>
+          <p class="text-slate-400 my-3">Use um dado por linha ou separe com ponto e vírgula. Escreva sim/não para antecedentes e ausência de tratamentos; não omita as unidades dos exames. Textos não reconhecidos não viram dados normais. As listas de comorbidades e motivos precisam estar completas. O exemplo abaixo é apenas um guia de escrita, não representa um paciente.</p>
+          <pre id="score-format-example" class="whitespace-pre-wrap text-slate-300 leading-relaxed"></pre>
+          <p class="mt-3 text-slate-400">SAPS 3: extremos de uma hora antes a uma hora após a admissão. SOFA original: piores valores das 24h. Se os valores diferem entre essas janelas, analise cada conjunto separadamente; o sistema não mistura nem seleciona automaticamente medidas repetidas. Glasgow deve refletir o estado sem efeito de sedação. ClCr: Cockcroft–Gault para adultos, com creatinina estável e peso apropriado. HAS-BLED requer história clínica, INR lábil e exposição a medicamentos/álcool; creatinina, INR e exames hepáticos isolados não substituem esses dados.</p>
+          <p class="mt-3 text-slate-400">Referências:
+            <a class="underline" href="https://doi.org/10.1007/s00134-005-2763-5" target="_blank" rel="noopener">SAPS 3 · Moreno et al., 2005</a>;
+            <a class="underline" href="https://doi.org/10.1007/BF01709751" target="_blank" rel="noopener">SOFA · Vincent et al., 1996</a>;
+            <a class="underline" href="https://doi.org/10.1378/chest.10-0134" target="_blank" rel="noopener">HAS-BLED · Pisters et al., 2010</a>;
+            <a class="underline" href="https://doi.org/10.1378/chest.09-1584" target="_blank" rel="noopener">CHA₂DS₂-VASc · Lip et al., 2010</a>;
+            <a class="underline" href="https://doi.org/10.1159/000180580" target="_blank" rel="noopener">Cockcroft–Gault, 1976</a>.
+          </p>
+        </details>
+      </section>
+
+      <section class="glass-card rounded-2xl p-5 border-t-2 border-cyan-500">
+        <h3 class="font-bold text-sm mb-3">Suporte Terapêutico & Conciliação</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          <div class="p-4 bg-slate-900/60 rounded-xl border border-slate-800">
+            <h4 class="text-cyan-300 font-bold mb-2">Estimativa nutricional de referência</h4>
+            <p id="nutri-recommendation" class="text-slate-300 leading-relaxed"></p>
+          </div>
+          <div class="p-4 bg-slate-900/60 rounded-xl border border-slate-800">
+            <h4 class="text-amber-300 font-bold mb-2">Revisão da função renal</h4>
+            <p id="renal-review" class="text-slate-300 leading-relaxed"></p>
+          </div>
+        </div>
+        <div id="lethal-alert-box" hidden role="status" class="mt-3 p-3 rounded-xl bg-amber-950/50 border border-amber-600 text-xs text-amber-200">
+          <strong>Revisão de medicamentos na disfunção renal</strong><p id="lethal-alert-text" class="mt-1"></p>
+        </div>
+        <p class="text-xs text-slate-400 mt-3">Analgésicos, anti-hipertensivos e antidiabéticos: registre a conciliação no plano da equipe. Não há verificação automática de interações medicamentosas nesta versão.</p>
+      </section>
+      <section class="glass-card rounded-2xl p-5 border-l-4 border-l-purple-500">
+        <h3 class="font-bold text-sm mb-3">Anticoagulação · Risco de Sangramento e Tromboembolismo</h3>
+        <p id="anticoagulation-analysis" class="p-4 bg-slate-900/60 rounded-xl text-xs leading-relaxed text-slate-300" role="status"></p>
+      </section>
+
+      <!-- DOCUMENTO: PASSAGEM DE PLANTÃO -->
+      <div id="handover-section" class="glass-card rounded-2xl p-5 border-t-2 border-indigo-500">
+        <div class="flex justify-between items-center mb-3">
+          <h3 class="font-bold text-slate-200 flex items-center gap-2">
+            <i data-lucide="clipboard-list" class="w-5 h-5 text-indigo-400"></i>
+            Passagem de Plantão Estruturada (SBAR)
+          </h3>
+          <button type="button" onclick="copyHandover()" class="text-xs text-indigo-400 hover:underline flex items-center gap-1">
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i> Copiar Texto
+          </button>
+        </div>
+
+        <p id="handover-status" role="status" class="text-xs text-slate-400 mb-3">Preencha os dados e gere a passagem para revisão.</p>
+        <div id="handover-content" class="space-y-3 text-xs text-slate-300 leading-relaxed bg-slate-900/80 p-4 rounded-xl border border-slate-800">
+          Nenhuma passagem gerada para este leito.
+        </div>
+      </div>
+
+    </div>
+
+    <aside class="space-y-6">
+      <section id="pred-card" class="glass-card rounded-2xl p-5 border-l-4 border-l-slate-500">
+        <span id="pred-badge" class="text-xs text-slate-400">Triagem manual</span>
+        <h3 id="pred-title" class="font-bold text-sm mt-2">Sem triagem informada</h3>
+        <p id="pred-desc" class="text-xs text-slate-400 mt-2">Selecione a classificação definida pela equipe. A gravidade não é inferida pelo número do leito.</p>
+        <div class="mt-4 flex gap-2">
+          <button onclick="feedback(this, 'Concordo')" class="flex-1 p-2 text-xs rounded-lg bg-emerald-600/30 text-emerald-300">Concordo</button>
+          <button onclick="feedback(this, 'Reavaliar')" class="flex-1 p-2 text-xs rounded-lg bg-slate-800 text-slate-300">Reavaliar</button>
+        </div>
+        <p id="feedback-status" role="status" class="text-xs text-slate-400 mt-3"></p>
+      </section>
+      <section class="glass-card rounded-2xl p-5">
+        <h3 class="font-bold text-sm mb-3">Revisão dos dados</h3>
+        <p class="text-xs text-slate-400 leading-relaxed">Confira HPP, HDA, unidades e doses reconhecidas no OCR. A passagem organiza o que foi informado, sem inferir diagnósticos ou prescrever tratamentos.</p>
+      </section>
+    </aside>
+  </div>
+</body>
+</html>
