@@ -14,7 +14,7 @@ test('unconfirmed data cannot be accepted',()=>{
  assert.equal(r.accepted.ph,undefined);assert.equal(r.issues[0].code,'unconfirmed');
 });
 test('wrong unit and out-of-range values are blocked',()=>{
- const r=V.validate({fio2:obs(30,'%'),ph:obs(9,'')});
+ const r=V.validate({fio2:obs(0.3,'%'),ph:obs(9,'')});
  assert.equal(Object.keys(r.accepted).length,0);
  assert.deepEqual(r.issues.map(x=>x.code),['unit','range']);
 });
