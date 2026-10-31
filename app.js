@@ -158,6 +158,7 @@ function selectBed(num) {
   renderCategory();
   renderSeverity();
   renderAudio();
+  renderBalanceCheck();
   recalcularFarmaco();
   recalcularAnticoagulation();
   updateAutoScores();
@@ -448,6 +449,29 @@ async function toggleRoundRecording() {
   }
 }
 
+function renderBalanceCheck() {
+  const values=draft().balanceCheck||{};
+  for(const [id,key] of [['balance-intake','intake'],['balance-output','output'],['balance-reported','reported']]) $(id).value=values[key]??'';
+  $('balance-check-result').textContent='Aguardando conferência do balanço deste leito.';
+}
+function checkBalanceUI() {
+  const keys=[['balance-intake','intake'],['balance-output','output'],['balance-reported','reported']];
+  const values={};
+  for(const [id,key] of keys){
+    const raw=$(id).value.trim();
+    if(raw===''||!Number.isFinite(Number(raw))){
+      $('balance-check-result').textContent='Informe todos os três valores numéricos.';
+      return;
+    }
+    values[key]=Number(raw);
+  }
+  const result=OslerValidation.checkFluidBalance(values.intake,values.output,values.reported);
+  draft().balanceCheck=values;
+  scheduleSave();
+  $('balance-check-result').textContent=(result.valid?'Conferência aritmética compatível. ':'Divergência — revisar o registro. ')+result.reason+(Number.isFinite(result.computed)?' · Saldo calculado: '+result.computed.toFixed(1)+' mL.':'');
+}
+$('balance-check-btn').addEventListener('click',checkBalanceUI);
+
 const uploadZone = $('upload-zone');
 uploadZone.addEventListener('click', () => { if (!ocrBusy) $('file-upload').click(); });
 uploadZone.addEventListener('keydown', event => {
@@ -501,6 +525,7 @@ async function bootICUMind() {
   renderCategory();
   renderSeverity();
   renderAudio();
+  renderBalanceCheck();
   recalcularFarmaco();
   recalcularAnticoagulation();
   initScoreUI();
