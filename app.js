@@ -500,6 +500,14 @@ document.querySelectorAll('textarea, input').forEach(input => input.addEventList
   capture();
   if (input.tagName === 'TEXTAREA' && input.id !== 'ocr-text') scheduleAutoScores();
 }));
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState==='hidden' && persistenceReady){
+    clearTimeout(saveTimer);
+    capture();
+    clearTimeout(saveTimer);
+    void saveDraftsNow();
+  }
+});
 window.addEventListener('beforeunload', event => {
   if (ocrBusy || recordingBusy || (recorder && recorder.state !== 'inactive')) {
     event.preventDefault();
@@ -509,11 +517,12 @@ window.addEventListener('beforeunload', event => {
 async function bootICUMind() {
   try {
     await loadSavedDrafts();
+    persistenceReady = true;
     $('persistence-status').textContent = 'Dados recuperados deste navegador';
   } catch (error) {
-    $('persistence-status').textContent = 'Banco local indisponível — use exportação de backup';
+    persistenceReady = false;
+    $('persistence-status').textContent = 'Banco local indisponível — dados não serão salvos; use exportação de backup';
   }
-  persistenceReady = true;
   const restored = draft();
   sharedFields.forEach(id => { $(id).value = restored.fields?.[id] || ''; });
   $('data-registro').value = restored.date || localDate();
