@@ -61,7 +61,9 @@ function createServer(store, { staticRoot } = {}) {
       const token = match[1];
       await store.authenticate(token);
       let result;
-      if (path.pathname === '/api/encounters' && req.method === 'GET') {
+      if (path.pathname === '/api/units' && req.method === 'GET') {
+        result = await store.listUnits(token);
+      } else if (path.pathname === '/api/encounters' && req.method === 'GET') {
         result = await store.listEncounters(token, checkId(path.searchParams.get('unit_id')));
       } else if (path.pathname === '/api/encounters' && req.method === 'POST') {
         const body = await readBody(req); fields(body, ['id', 'unit_id', 'bed_code']);

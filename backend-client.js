@@ -16,6 +16,7 @@
       return response.json();
     }
     return {
+      listUnits: () => request('/api/units'),
       listEncounters: unitId => request(`/api/encounters?unit_id=${encodeURIComponent(unitId)}`),
       createEncounter: encounter => request('/api/encounters', 'POST', encounter),
       closeEncounter: id => request(`/api/encounters/${encodeURIComponent(id)}/close`, 'POST'),

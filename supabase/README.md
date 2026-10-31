@@ -27,8 +27,10 @@ Never run the test bootstrap on a Supabase project. CI runs both suites.
    migration history, then apply pending migrations with `supabase db push`.
    Never link production. `config.toml` supplies local defaults; review hosted
    Auth settings separately.
-3. The migration versions are now unique: `20261031000100`, `20261031000200`,
-   `20261031000300`. PR #1's filenames shared the CLI version prefix `20261031`.
+3. The local migration versions match the development project's history:
+   `20261031225711`, `20261031225712`, `20261031225830`,
+   `20261031230035`, `20261031230053`.
+   PR #1's filenames shared the CLI version prefix `20261031`.
    If those old files were already applied remotely, reconcile the actual schema
    and migration history with the owner first. Do not replay or blindly repair them.
 4. Provision `units` and `unit_members` through a trusted administrative session.
@@ -58,6 +60,7 @@ use `no-store`; writes accept JSON up to 16 KiB. Errors hide database details.
 
 | Method | Path | Input |
 | --- | --- | --- |
+| GET | `/api/units` | Units visible to the authenticated user |
 | GET | `/api/encounters?unit_id=<uuid>` | Explicit unit |
 | POST | `/api/encounters` | `id`, `unit_id`, `bed_code` (2–3 digits) |
 | POST | `/api/encounters/<uuid>/close` | No fields required |
@@ -102,3 +105,82 @@ back silently to a local success state. Login/MFA UI, audited draft migration,
 pagination, attachments, operational audit, retention and backup restore remain
 separate work. Hosted end-to-end validation requires a configured development
 project and is not claimed by the local tests.
+
+## Hosted development smoke checks
+
+Only use project `otnwkxchugsovtjdanyu` on branch
+`develop/osler-secure-foundation`. With `SUPABASE_URL` and
+`SUPABASE_PUBLISHABLE_KEY` supplied through the environment, run
+`node scripts/test-hosted.js`. The script performs no clinical writes and refuses
+other project URLs. It also starts an ephemeral loopback API and checks the
+browser adapter through that API against hosted Auth, closing the server on exit.
+Optional `OSLER_TEST_ACCESS_TOKEN` enables session and unit listing checks with
+a synthetic user, both directly and through the browser adapter/local API.
+It does not validate authenticated writes, MFA or isolation between units.
+
+Investigation on 2026-10-31 reproduced the `hosted signup policy` failure:
+hosted `/auth/v1/settings` returned `disable_signup: false`, with
+`mailer_autoconfirm: false` and `external.anonymous_users: false`.
+Email verification and disabled anonymous sign-in do not disable public signup.
+The local `[auth] enable_signup = false` does not configure hosted Auth.
+After the owner disabled **Allow new users to sign up**, a fresh remote check
+returned `disable_signup: true`, `mailer_autoconfirm: false` and
+`external.anonymous_users: false`. The strict `disable_signup === true`
+requirement remains in place.
+
+The next check exposed Auth returning HTTP 403 with `error_code: bad_jwt` for
+the malformed synthetic JWT. The smoke check accepts 401 or that specific 403
+response; unrelated 403 errors, successful responses and service failures fail.
+The rerun passed hosted Auth settings, invalid session, denied anonymous access
+to all four tables, and missing/invalid session rejection through the browser
+adapter/local API. No synthetic access token was available, so authenticated
+hosted listing and writes remain unverified. No hosted data or configuration
+was changed by these checks.
+
+## Obtain a synthetic session without public signup
+
+The available Supabase connector has SQL and migration tools, but no Auth admin
+user-creation action. Do not insert into `auth.users` or manufacture JWTs.
+Use the official administrative user creation flow, then the official password
+grant (the REST equivalent of `signInWithPassword`):
+[createUser](https://supabase.com/docs/reference/javascript/auth-admin-createuser),
+[password login](https://supabase.com/docs/reference/javascript/auth-signinwithpassword).
+
+1. Open project `otnwkxchugsovtjdanyu` in the Supabase dashboard and check the
+   project reference before proceeding.
+2. Go to **Authentication → Users → Add user → Create new user**.
+3. Enter `osler-synthetic-reader@example.com` and generate a unique strong test
+   password. Select **Auto Confirm User** for this synthetic account only, then
+   create it. Do not change global email confirmation, MFA or public signup.
+   If the dashboard uses **Add user** as the final button, use that button.
+4. Do not add memberships yet: a new account can authenticate but should see no
+   units. This does not validate the reader role until a membership is provisioned.
+5. In a local editor, create `.env.test` in the repository root. It is ignored by
+   Git. Put these variables there, using the actual password only in that file:
+
+   ```dotenv
+   SUPABASE_URL=https://otnwkxchugsovtjdanyu.supabase.co
+   SUPABASE_PUBLISHABLE_KEY=<development publishable key from project API settings>
+   OSLER_TEST_EMAIL=osler-synthetic-reader@example.com
+   OSLER_TEST_PASSWORD=<unique synthetic password>
+   OSLER_REQUIRE_AUTH=1
+   ```
+
+6. Run `node --env-file=.env.test scripts/test-hosted.js` with Node.js >=22.
+   Do not paste credentials into chat, command arguments, screenshots or logs.
+   Do not print the file. Delete its password entry after validation if no longer
+   needed. No service-role or secret API key is required.
+
+The script checks that public signup remains disabled before attempting login,
+does not call signup, validates the synthetic identity through Auth, and checks
+unit listing directly and through the browser adapter/local API. Credentials
+and response details are never printed. A session created by the runner is
+signed out in `finally` with local scope; externally supplied access tokens are
+not signed out. Supabase may keep an issued access JWT valid until expiration:
+this is not a test of immediate token revocation. Auth login/logout creates Auth
+session records, but the runner does not write clinical tables.
+
+Without credentials, `OSLER_REQUIRE_AUTH=1` makes the run fail, rather than claim
+authenticated success. Authenticated writes, cross-unit isolation, reader write
+denial, MFA, refresh and concurrent closure/idempotency still require dedicated
+synthetic users and fixtures; successful unit listing alone does not prove them.

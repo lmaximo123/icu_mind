@@ -14,7 +14,7 @@ begin
   end;
   raise exception 'Expected SQLSTATE %, query succeeded', expected;
 end $$;
-insert into auth.users values
+insert into auth.users(id) values
  ('10000000-0000-0000-0000-000000000001'),
  ('10000000-0000-0000-0000-000000000002'),
  ('10000000-0000-0000-0000-000000000003');

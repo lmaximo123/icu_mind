@@ -14,6 +14,7 @@ async function fixture(t, overrides = {}, options = {}) {
   const store = {
     authenticate: async token => { if (token !== 'synthetic.session') throw new ApiError(401, 'Invalid session'); },
     appendObservation: async (token, body) => { calls.push(body); return { id: body.event_id }; },
+    listUnits: async () => [{ id, label: 'Synthetic unit' }],
     listEncounters: async () => [], createEncounter: async (_, body) => [body],
     closeEncounter: async () => [], listObservations: async () => [], ...overrides
   };
@@ -100,7 +101,7 @@ test('Supabase adapter forwards user JWT, never substitutes privileged credentia
   assert.equal(requests[1].options.redirect, 'error');
 });
 test('Supabase errors and network failures are sanitized and fail closed', async () => {
-  for (const [status, expected] of [[401, 401], [403, 403], [409, 409], [400, 422], [500, 503]]) {
+  for (const [status, expected] of [[401, 401], [403, 403], [409, 409], [400, 422], [422, 422], [500, 503]]) {
     const store = createStore({ url: 'https://synthetic.supabase.co', key: 'synthetic',
       fetchImpl: async () => new Response('private database error', { status }) });
     await assert.rejects(store.authenticate('synthetic.session'), e => e.status === expected && !e.message.includes('private'));
@@ -114,6 +115,7 @@ test('browser adapter exercises HTTP API and never silently saves after failure'
   let token = 'synthetic.session';
   const client = createClient({ getAccessToken: async () => token,
     fetchImpl: (path, options) => fetch(base + path, options) });
+  assert.deepEqual(await client.listUnits(), [{ id, label: 'Synthetic unit' }]);
   assert.deepEqual(await client.appendObservation(event), { id: event.id });
   assert.deepEqual(await client.listEncounters(id), []);
   assert.deepEqual(await client.listObservations(id), []);

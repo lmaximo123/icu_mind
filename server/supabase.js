@@ -24,13 +24,14 @@ function createStore({ url, key, fetchImpl = fetch }) {
       if (status === 401) throw new ApiError(401, 'Invalid session');
       if (status === 403) throw new ApiError(403, 'Access denied');
       if (status === 409) throw new ApiError(409, 'Conflicting record');
-      if (status === 400) throw new ApiError(422, 'Invalid record');
+      if (status === 400 || status === 422) throw new ApiError(422, 'Invalid record');
       throw new ApiError(503, 'Backend unavailable');
     }
     try { return await response.json(); }
     catch { throw new ApiError(503, 'Invalid backend response'); }
   }
   return {
+    listUnits: token => request('/rest/v1/units?select=id,label&order=label.asc,id.asc&limit=100', token),
     async authenticate(token) {
       const user = await request('/auth/v1/user', token);
       if (!user.id) throw new ApiError(401, 'Invalid session');
