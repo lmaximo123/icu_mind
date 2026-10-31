@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 190" role="img" aria-labelledby="title desc">
+<title id="title">Osler</title><desc id="desc">Logotipo Osler com íris robótica vermelha circular e tipografia metálica escura.</desc>
+<defs>
+ <radialGradient id="core"><stop offset="0" stop-color="#ff7777"/><stop offset=".22" stop-color="#ff1717"/><stop offset=".62" stop-color="#390606"/><stop offset="1" stop-color="#08090c"/></radialGradient>
+ <linearGradient id="metal" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#f1f1f1"/><stop offset=".48" stop-color="#92969c"/><stop offset="1" stop-color="#555a62"/></linearGradient>
+ <filter id="glow"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+<rect width="760" height="190" rx="18" fill="#08090c"/>
+<g transform="translate(18 13)">
+ <circle cx="82" cy="82" r="70" fill="#101216" stroke="#555b63" stroke-width="7"/>
+ <circle cx="82" cy="82" r="58" fill="#050608" stroke="#a30d14" stroke-width="4"/>
+ <circle cx="82" cy="82" r="45" fill="none" stroke="#4b0a10" stroke-width="8"/>
+ <circle cx="82" cy="82" r="34" fill="url(#core)" stroke="#ef242b" stroke-width="3" filter="url(#glow)"/>
+ <circle cx="82" cy="82" r="12" fill="#ff2525" filter="url(#glow)"/>
+ <path d="M82 12 A70 70 0 0 1 142 46 M22 118 A70 70 0 0 0 82 152" fill="none" stroke="#e31b24" stroke-width="5" stroke-linecap="round"/>
+ <path d="M9 82h14 M141 82h14 M82 0v12 M82 152v12" stroke="#aeb3bb" stroke-width="4" stroke-linecap="round"/>
+</g>
+<text x="184" y="126" fill="url(#metal)" font-family="Arial, Helvetica, sans-serif" font-size="132" font-weight="800" letter-spacing="-5">sler</text>
+<path d="M184 157 H735" stroke="#7b1118" stroke-width="2"/>
+<path d="M405 157 l9 -12 8 22 10 -35 10 25 8 -3" fill="none" stroke="#ff282e" stroke-width="2.5" filter="url(#glow)"/>
+</svg>
