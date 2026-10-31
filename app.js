@@ -13,6 +13,7 @@ const DB_NAME = 'icu-mind-local';
 const DB_VERSION = 1;
 let persistenceReady = false;
 let saveTimer;
+let saveQueue = Promise.resolve();
 function openPersistenceDB() {
   return new Promise((resolve, reject) => {
     if (!('indexedDB' in window)) return reject(new Error('IndexedDB indisponível'));
@@ -34,15 +35,26 @@ async function loadSavedDrafts() {
   });
 }
 function saveDraftsNow() {
-  if (!persistenceReady) return;
-  const dbPromise = openPersistenceDB();
-  dbPromise.then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction('beds', 'readwrite');
-    const store = tx.objectStore('beds');
-    drafts.forEach((data, bed) => store.put({ bed, data }));
-    tx.oncomplete = () => { db.close(); const status = $('persistence-status'); if (status) status.textContent = 'Salvo neste navegador'; resolve(); };
-    tx.onerror = () => { db.close(); const status = $('persistence-status'); if (status) status.textContent = 'Falha ao salvar — exporte um backup'; reject(tx.error); };
-  })).catch(() => { const status = $('persistence-status'); if (status) status.textContent = 'Falha ao salvar — exporte um backup'; });
+  if (!persistenceReady) return Promise.resolve(false);
+  // Serializa gravações para evitar transações concorrentes e estados antigos.
+  const snapshot = [...drafts.entries()].map(([bed, data]) => ({
+    bed, data: JSON.parse(JSON.stringify({ ...data, audioUrl: null }))
+  }));
+  saveQueue = saveQueue.catch(() => {}).then(async () => {
+    const db = await openPersistenceDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('beds', 'readwrite');
+      const store = tx.objectStore('beds');
+      snapshot.forEach(item => store.put(item));
+      tx.oncomplete = () => { db.close(); $('persistence-status').textContent = 'Salvo neste navegador'; resolve(true); };
+      tx.onerror = () => { db.close(); reject(tx.error || new Error('Falha ao salvar')); };
+      tx.onabort = () => { db.close(); reject(tx.error || new Error('Gravação interrompida')); };
+    });
+  }).catch(() => {
+    $('persistence-status').textContent = 'Falha ao salvar — exporte um backup';
+    return false;
+  });
+  return saveQueue;
 }
 function scheduleSave() {
   const status = $('persistence-status');
@@ -64,7 +76,9 @@ async function importBackup(file) {
     const payload = JSON.parse(await file.text());
     if (payload.app !== 'ICU-Mind' || !Array.isArray(payload.beds)) throw new Error('Arquivo incompatível');
     payload.beds.forEach(item => { if (/^\d{2}$/.test(item.bed) && item.data && typeof item.data === 'object') drafts.set(item.bed, item.data); });
-    saveDraftsNow(); selectBed(currentBed); $('persistence-status').textContent = 'Backup importado e salvo neste navegador';
+    selectBed(currentBed);
+    const saved = await saveDraftsNow();
+    $('persistence-status').textContent = saved ? 'Backup importado e salvo neste navegador' : 'Backup importado na sessão, mas não foi salvo. Exporte um backup.';
   } catch { $('persistence-status').textContent = 'Não foi possível importar esse backup'; }
 }
 let currentBed = '01';
@@ -87,6 +101,7 @@ function capture() {
   const data = draft();
   sharedFields.forEach(id => data.fields[id] = $(id).value);
   data.notes[currentTab] = $('manual-text-input').value;
+  // OCR bruto é apenas um rascunho: não alimenta cálculos até revisão e aplicação.
   data.ocr[currentTab] = $('ocr-text').value;
   data.date = $('data-registro').value;
   data.devices = [...document.querySelectorAll('#invasive-suggestions input')].map(input => input.checked);
@@ -265,8 +280,8 @@ async function processarFotoOCR() {
     $('ocr-text').value = text;
     draft().ocr[currentTab] = text;
     markDirty();
-    updateAutoScores();
-    $('upload-status').textContent = text ? 'Texto extraído. Escores atualizados automaticamente. Revise o texto, as unidades e as pendências no painel.' : 'Nenhum texto legível encontrado. Tente uma imagem mais nítida ou digite as notas.';
+    capture();
+    $('upload-status').textContent = text ? 'OCR preliminar. Confira valores, unidades, horário, leito e contexto antes de adicionar às notas; ainda não entra nos escores.' : 'Nenhum texto legível encontrado. Tente uma imagem mais nítida ou digite as notas.';
   } catch {
     $('upload-status').textContent = 'Não foi possível reconhecer o texto. Verifique a conexão, tente outra imagem ou digite as notas.';
   } finally {
@@ -278,6 +293,8 @@ function applyOCR() {
   const text = $('ocr-text').value.trim();
   if (!text) { $('upload-status').textContent = 'Extraia ou digite um texto e revise antes de adicionar às notas.'; return; }
   $('manual-text-input').value = [$('manual-text-input').value.trim(), text].filter(Boolean).join('\n\n');
+  $('ocr-text').value = '';
+  draft().ocr[currentTab] = '';
   markDirty();
   capture();
   updateAutoScores();
@@ -457,10 +474,10 @@ function markDirty() {
 document.querySelectorAll('textarea, input').forEach(input => input.addEventListener('input', () => {
   markDirty();
   capture();
-  if (input.tagName === 'TEXTAREA') scheduleAutoScores();
+  if (input.tagName === 'TEXTAREA' && input.id !== 'ocr-text') scheduleAutoScores();
 }));
 window.addEventListener('beforeunload', event => {
-  if (ocrBusy || recordingBusy || (recorder && recorder.state !== 'inactive') || [...drafts.values()].some(data => data.handover || data.audioUrl || data.severity || Object.values(data.fields).some(Boolean) || Object.values(data.notes).some(Boolean) || Object.values(data.ocr).some(Boolean) || data.devices.some(Boolean)) || [...document.querySelectorAll('textarea')].some(input => input.value.trim())) {
+  if (ocrBusy || recordingBusy || (recorder && recorder.state !== 'inactive')) {
     event.preventDefault();
     event.returnValue = '';
   }
@@ -473,9 +490,17 @@ async function bootICUMind() {
     $('persistence-status').textContent = 'Banco local indisponível — use exportação de backup';
   }
   persistenceReady = true;
-  $('data-registro').value = draft().date;
+  const restored = draft();
+  sharedFields.forEach(id => { $(id).value = restored.fields?.[id] || ''; });
+  $('data-registro').value = restored.date || localDate();
+  document.querySelectorAll('#invasive-suggestions input').forEach((input, i) => { input.checked = Boolean(restored.devices?.[i]); });
+  $('handover-content').textContent = restored.handover || 'Nenhuma passagem gerada para este leito.';
+  $('handover-content').style.whiteSpace = 'pre-wrap';
+  $('handover-status').textContent = restored.handover ? 'Passagem recuperada; revise antes de usar.' : 'Preencha os dados e gere a passagem para revisão.';
+  $('feedback-status').textContent = restored.feedback || '';
   renderCategory();
   renderSeverity();
+  renderAudio();
   recalcularFarmaco();
   recalcularAnticoagulation();
   initScoreUI();
