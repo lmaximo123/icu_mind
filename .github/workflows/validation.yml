@@ -12,8 +12,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --test tests/osler-validation.test.js
+      - run: node --test tests/*.test.js
       - run: node --check app.js
       - run: node --check score-ui.js
       - run: node --check clinical-scores.js
       - run: node --check osler-validation.js
+      - run: node --check backend-client.js
+      - run: for f in server/*.js; do node --check "$f" || exit; done
+  database:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/test-db.sh
