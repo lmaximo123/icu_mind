@@ -184,3 +184,71 @@ Without credentials, `OSLER_REQUIRE_AUTH=1` makes the run fail, rather than clai
 authenticated success. Authenticated writes, cross-unit isolation, reader write
 denial, MFA, refresh and concurrent closure/idempotency still require dedicated
 synthetic users and fixtures; successful unit listing alone does not prove them.
+
+## Hosted synthetic write security suite
+
+`scripts/test-hosted-writes.js` exercises real Auth, the browser adapter, local
+HTTP API, PostgREST and database policies on the authorized development project.
+It requires three distinct official Auth accounts:
+
+| Account | Fixture membership |
+| --- | --- |
+| `osler-synthetic-reader@example.com` | reader in A |
+| `osler-synthetic-clinician-a@example.com` | clinician in A |
+| `osler-synthetic-clinician-b@example.com` | clinician in B |
+
+Create the additional accounts using the same dashboard steps above, each with
+its own password and account-specific Auto Confirm User. Keep public signup
+disabled. Add these variables to the existing ignored `.env.test` in an editor:
+
+```dotenv
+OSLER_TEST_CLINICIAN_A_EMAIL=osler-synthetic-clinician-a@example.com
+OSLER_TEST_CLINICIAN_A_PASSWORD=<unique password for A>
+OSLER_TEST_CLINICIAN_B_EMAIL=osler-synthetic-clinician-b@example.com
+OSLER_TEST_CLINICIAN_B_PASSWORD=<unique password for B>
+OSLER_ALLOW_SYNTHETIC_WRITES=1
+```
+
+After verifying the connector project URL is exactly
+`https://otnwkxchugsovtjdanyu.supabase.co`, execute
+`supabase/tests/hosted-fixtures.sql` through the trusted administrative SQL
+connection. This is fixture provisioning, not a schema migration. It creates two
+dedicated units from `scripts/hosted-fixtures.json` and three memberships only;
+it does not edit Auth tables, update existing rows or delete anything. It aborts
+transactionally on missing accounts, ID collisions or unexpected memberships.
+Never run this administrative fixture file in production.
+
+Then run:
+
+```sh
+node --env-file=.env.test scripts/test-hosted-writes.js
+```
+
+The runner refuses other projects, secret keys, missing accounts and missing
+write opt-in. It verifies signup remains disabled and all three identities and
+fixture roles before clinical writes. Each invocation generates fresh episode
+and observation UUIDs. No existing episode is closed or observation modified.
+New synthetic episodes are closed on success and attempted in `finally` on
+failure; immutable synthetic events are intentionally retained for inspection.
+No triggers or policies are disabled for cleanup. The dedicated units and
+memberships remain for reruns, and newly created sessions are signed out.
+
+Checks include writes in both units with session-bound authors; racing first
+attempts plus sequential and concurrent retries; changed-payload conflict; bidirectional
+read/write/closure isolation; reader read access with create/append/close denial;
+direct observation insert/update/delete denial; closure, repeat closure, rejected
+new events after closure and accepted original retries after closure. An empty
+update result is checked against the owner's unchanged episode, rather than
+treated as a permission error or proof of a successful close.
+
+This does not cover MFA, refresh, immediate JWT revocation, browser UI, backup
+restoration, large-list pagination or a first-write/closure race. Synthetic
+fixtures are not evidence of clinical readiness. Hosted results must be reported
+separately from local unit tests; a missing credential is a failed preflight,
+never a passing security scenario.
+
+Current validation status: 23 local tests passed. The hosted write runner was
+invoked and stopped at configuration preflight because the two clinician
+accounts' environment variables had not yet been provided. No hosted write
+scenario is claimed as passed, and fixture provisioning has not been executed.
+Only the previously completed hosted authenticated read smoke check has passed.

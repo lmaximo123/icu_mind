@@ -35,6 +35,7 @@ async function verifySynthetic({ key, token, fetchImpl }) {
   try { user = await response.json(); }
   catch { throw new Error('Invalid synthetic Auth user'); }
   if (!user.id || !syntheticEmail.test(user.email || '')) throw new Error('Only synthetic test users are allowed');
+  return { id: user.id, email: user.email };
 }
 async function signOutSynthetic({ key, token, fetchImpl }) {
   await authRequest(key, 'logout?scope=local', {
