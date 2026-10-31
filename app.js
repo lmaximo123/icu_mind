@@ -95,7 +95,7 @@ function capture() {
 function renderCategory() {
   document.querySelectorAll('.tab-btn').forEach(button => {
     const active = button.dataset.tab === currentTab;
-    button.className = 'tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap ' + (active ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700');
+    button.className = 'tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap ' + (active ? 'bg-red-700 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700');
     button.setAttribute('aria-selected', String(active));
     button.tabIndex = active ? 0 : -1;
   });
@@ -128,7 +128,7 @@ function selectBed(num) {
   document.querySelectorAll('#invasive-suggestions input').forEach((input, i) => input.checked = Boolean(data.devices[i]));
   document.querySelectorAll('.bed-btn').forEach(button => {
     const active = button.dataset.bed === num;
-    button.className = 'bed-btn px-3 py-1.5 rounded-lg text-xs transition ' + (active ? 'bg-indigo-600 text-white font-bold' : 'bg-slate-800 text-slate-400 hover:bg-slate-700');
+    button.className = 'bed-btn px-3 py-1.5 rounded-lg text-xs transition ' + (active ? 'bg-red-700 text-white font-bold' : 'bg-slate-800 text-slate-400 hover:bg-slate-700');
     button.setAttribute('aria-pressed', String(active));
   });
   $('active-bed').textContent = 'Leito ' + num;
