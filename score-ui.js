@@ -2,7 +2,7 @@
 let scoreTimer;
 function scoreSourceText() {
   const data=draft();
-  return [data.fields['hpp-input'],data.fields['hda-input'],...Object.values(data.notes),...Object.values(data.ocr)].filter(Boolean).join('\n');
+  return [data.fields['hpp-input'],data.fields['hda-input'],...Object.values(data.notes)].filter(Boolean).join('\n');
 }
 function scheduleAutoScores() {
   clearTimeout(scoreTimer);
