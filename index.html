@@ -153,7 +153,7 @@
         <div id="upload-zone" role="button" tabindex="0" aria-label="Selecionar imagem do relatório" class="border-2 border-dashed border-slate-700 hover:border-red-700 rounded-xl p-6 text-center transition cursor-pointer bg-slate-900/30">
           <i data-lucide="upload-cloud" class="w-10 h-10 text-red-400 mx-auto mb-2"></i>
           <p class="text-sm font-medium text-slate-300">Arraste a foto do relatório ou clique para fazer upload</p>
-          <p class="text-xs text-slate-500 mt-1">JPG, PNG ou WebP até 10 MB. O OCR inicia automaticamente e atualiza os escores. Confira o texto reconhecido.</p>
+          <p class="text-xs text-slate-500 mt-1">JPG, PNG ou WebP até 10 MB. O OCR inicia automaticamente, mas só entra nos escores após revisão e aplicação manual.</p>
 
         </div>
 
@@ -166,7 +166,7 @@
           <span class="text-xs text-slate-500">O OCR pode errar números, unidades e nomes.</span>
         </div>
         <label for="ocr-text" class="block text-xs text-slate-400 mt-4 mb-2">Texto extraído · revise antes de usar</label>
-        <textarea id="ocr-text" rows="4" class="w-full bg-slate-900/80 text-xs p-3 rounded-xl border border-slate-700" placeholder="O texto reconhecido aparece aqui e alimenta os cálculos automaticamente."></textarea>
+        <textarea id="ocr-text" rows="4" class="w-full bg-slate-900/80 text-xs p-3 rounded-xl border border-slate-700" placeholder="OCR preliminar: confira e aplique às notas antes de usar em cálculos."></textarea>
         <button id="apply-ocr" onclick="applyOCR()" class="mt-2 px-3 py-2 text-xs rounded-lg bg-slate-800 hover:bg-slate-700">Adicionar texto revisado às notas</button>
         <label for="manual-text-input" class="block text-xs text-slate-400 mt-4 mb-2">Redação manual / Notas da categoria</label>
         <textarea id="manual-text-input" rows="4" class="w-full bg-slate-900/80 text-xs p-3 rounded-xl border border-slate-700" placeholder="Ex.: idade: 70; sexo: masculino; peso: 70 kg; creatinina: 1,2 mg/dL"></textarea>
@@ -207,7 +207,7 @@
           <h3 class="font-bold text-sm">Escores automáticos · Leito <span id="score-bed">01</span></h3>
           <span id="score-status" role="status" class="text-xs text-slate-400"></span>
         </div>
-        <p class="text-xs text-slate-400 leading-relaxed mb-4">Digite ou cole dados nas notas, HPP ou HDA, ou envie uma imagem. Os resultados atualizam automaticamente. Exames isolados não completam todos os escores: dados ausentes, ambíguos ou conflitantes aparecem como pendências. Revise valores e unidades reconhecidos antes de usar.</p>
+        <p class="text-xs text-slate-400 leading-relaxed mb-4">Digite ou cole dados nas notas, HPP ou HDA. Imagens exigem revisão do OCR antes de entrar nos cálculos. Os resultados atualizam automaticamente. Exames isolados não completam todos os escores: dados ausentes, ambíguos ou conflitantes aparecem como pendências. Revise valores e unidades reconhecidos antes de usar.</p>
         <div id="score-results" class="space-y-3" aria-label="Resultados dos escores"></div>
         <details class="mt-4 p-3 rounded-xl bg-slate-900/60 border border-slate-700">
           <summary class="cursor-pointer text-xs text-red-300">Conferir dados extraídos e corrigir informações</summary>
