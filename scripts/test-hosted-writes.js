@@ -35,6 +35,13 @@ function configuration(env) {
 async function denied(operation, status) {
   await assert.rejects(operation, error => error.message === `Osler API request failed (${status})`);
 }
+function observationTimestamp(startedAt, now = Date.now()) {
+  // PostgreSQL has microseconds; Date.parse truncates them. Round above the
+  // database's creation instant even when the runner's clock is behind it.
+  const start = Date.parse(startedAt);
+  assert.ok(Number.isFinite(start));
+  return new Date(Math.max(now, start + 1)).toISOString();
+}
 
 async function main() {
   const { key, users } = configuration(process.env);
@@ -109,7 +116,7 @@ async function main() {
     for (const user of [a, b]) {
       user.event = { id: randomUUID(), encounter_id: user.encounter.id,
         concept: 'ph', value: 7.4, unit: '', confirmed: true, source_type: 'manual',
-        timestamp: new Date(Math.max(Date.now(), Date.parse(user.encounter.started_at))).toISOString() };
+        timestamp: observationTimestamp(user.encounter.started_at) };
       // A tests two racing first attempts, not only retries of an existing row.
       if (user === a) {
         const firstAttempts = await Promise.all([
@@ -202,4 +209,4 @@ if (require.main === module) main().catch(() => {
   console.error(`Hosted write check failed at: ${stage}. Credentials and backend details suppressed.`);
   process.exitCode = 1;
 });
-module.exports = { configuration, denied };
+module.exports = { configuration, denied, observationTimestamp };

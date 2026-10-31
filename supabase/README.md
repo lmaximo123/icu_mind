@@ -247,8 +247,18 @@ fixtures are not evidence of clinical readiness. Hosted results must be reported
 separately from local unit tests; a missing credential is a failed preflight,
 never a passing security scenario.
 
-Current validation status: 23 local tests passed. The hosted write runner was
-invoked and stopped at configuration preflight because the two clinician
-accounts' environment variables had not yet been provided. No hosted write
-scenario is claimed as passed, and fixture provisioning has not been executed.
-Only the previously completed hosted authenticated read smoke check has passed.
+Current validation status (2026-10-31): 24 local tests passed. After official
+creation of the two clinician accounts, the dedicated units and memberships were
+provisioned and the full hosted write suite passed, including all checks listed
+above, episode cleanup and local-scope logout of the three sessions.
+
+The first hosted attempt created two synthetic episodes but no observations:
+the runner clock was behind the database, and JavaScript truncated the database
+episode timestamp from microseconds to milliseconds. The test measurement could
+therefore precede its episode by a fraction of a millisecond. Both episodes were
+closed by cleanup. The runner now selects a synthetic timestamp at least one
+millisecond after the parsed database start; a regression test covers this case.
+Database timestamp validation and signup policy were not relaxed. The successful
+rerun created two further episodes and two immutable observations, all retained
+for inspection, with no episodes left open in the dedicated fixtures. Existing
+data was preserved; no production resources were used.

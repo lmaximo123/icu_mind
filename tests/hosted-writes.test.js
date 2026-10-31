@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { configuration, denied } = require('../scripts/test-hosted-writes.js');
+const { configuration, denied, observationTimestamp } = require('../scripts/test-hosted-writes.js');
 const fixtures = require('../scripts/hosted-fixtures.json');
 function environment() {
   return {
@@ -29,4 +29,12 @@ test('write denial assertions distinguish policy rejection from backend outage a
   await denied(async () => { throw new Error('Osler API request failed (403)'); }, 403);
   await assert.rejects(denied(async () => {}, 403));
   await assert.rejects(denied(async () => { throw new Error('Osler API request failed (503)'); }, 403));
+});
+test('synthetic measurement follows database microsecond clock when runner clock is behind', () => {
+  const start = '2026-10-31T23:43:48.359958+00:00';
+  assert.equal(observationTimestamp(start, Date.parse('2026-10-31T23:41:00Z')),
+    '2026-10-31T23:43:48.360Z');
+  assert.equal(observationTimestamp(start, Date.parse('2026-10-31T23:44:00Z')),
+    '2026-10-31T23:44:00.000Z');
+  assert.throws(() => observationTimestamp('invalid'));
 });
