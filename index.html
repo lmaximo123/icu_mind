@@ -11,6 +11,9 @@
   <script src="/clinical-scores.js" defer></script>
   <script src="/score-ui.js" defer></script>
   <script src="/app.js" defer></script>
+  <script src="/backend-client.js" defer></script>
+  <script src="/remote-session.js" defer></script>
+  <script src="/remote-ui.js" defer></script>
   <style>
     body { background-color: #08090c; transition: background-color .3s ease; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; }
     [hidden] { display: none !important; }
@@ -78,6 +81,53 @@
 
     </div>
   </header>
+
+  <details id="remote-panel" class="glass-card rounded-2xl p-4 mb-6">
+    <summary class="cursor-pointer font-semibold">Persistência remota · desenvolvimento sintético</summary>
+    <p class="text-xs text-slate-400 mt-3">Use apenas contas e dados sintéticos. Selecione o destino e revise cada envio. Os rascunhos locais, notas, imagens e áudios continuam neste navegador e não são enviados por este painel.</p>
+    <p id="remote-availability" role="status" class="text-sm mt-3">Verificando disponibilidade da API…</p>
+    <div id="remote-content" hidden>
+      <form id="remote-login" class="flex flex-wrap items-end gap-3 mt-4">
+        <label class="text-xs">Email sintético<input id="remote-email" type="email" required autocomplete="username" class="block rounded-lg p-2 mt-1 border" placeholder="osler-synthetic-reader@example.com"></label>
+        <label class="text-xs">Senha<input id="remote-password" type="password" required maxlength="1024" autocomplete="current-password" class="block rounded-lg p-2 mt-1 border"></label>
+        <button id="remote-login-button" type="submit" class="bg-red-700 rounded-lg p-2">Entrar</button>
+      </form>
+      <div id="remote-account" hidden class="flex flex-wrap items-center gap-3 mt-3">
+        <span id="remote-user" class="text-xs"></span>
+        <button id="remote-logout" type="button" class="bg-slate-800 rounded-lg p-2">Sair</button>
+      </div>
+      <p id="remote-status" role="status" aria-live="polite" class="text-sm mt-3">Entre para acessar as unidades permitidas.</p>
+      <p id="remote-pending" class="text-xs text-amber-200 mt-2" hidden></p>
+      <button id="remote-discard" type="button" hidden class="rounded-lg p-2 bg-slate-800 text-xs mt-2">Descartar tentativa desta tela</button>
+      <div id="remote-workspace" hidden class="mt-4 space-y-4">
+        <div class="flex flex-wrap items-end gap-3">
+          <label class="text-xs">Unidade<select id="remote-unit" class="block rounded-lg p-2 mt-1 border"><option value="">Selecione uma unidade</option></select></label>
+          <label class="text-xs">Episódio<select id="remote-encounter" class="block rounded-lg p-2 mt-1 border"><option value="">Selecione um episódio</option></select></label>
+          <button id="remote-refresh" type="button" class="bg-slate-800 rounded-lg p-2">Atualizar</button>
+        </div>
+        <p id="remote-destination" class="text-sm text-amber-200">Nenhum destino selecionado.</p>
+        <form id="remote-create" class="flex flex-wrap items-end gap-3">
+          <label class="text-xs">Novo episódio · leito sintético<input id="remote-bed" required pattern="[0-9]{2,3}" maxlength="3" inputmode="numeric" placeholder="001" class="block rounded-lg p-2 mt-1 border"></label>
+          <button id="remote-create-button" type="submit" class="bg-slate-800 rounded-lg p-2">Abrir novo episódio</button>
+          <button id="remote-close" type="button" class="bg-slate-800 rounded-lg p-2">Encerrar episódio selecionado</button>
+        </form>
+        <form id="remote-measurement" class="rounded-xl border border-slate-700 p-4 space-y-3">
+          <p class="text-xs text-slate-400">Nova observação manual. Revise valor, unidade, horário e destino. O histórico remoto não altera automaticamente os escores ou rascunhos locais.</p>
+          <fieldset id="remote-measurement-fields" class="flex flex-wrap items-end gap-3">
+            <label class="text-xs">Variável<select id="remote-concept" class="block rounded-lg p-2 mt-1 border"></select></label>
+            <label class="text-xs">Valor<input id="remote-value" type="text" inputmode="decimal" required class="block rounded-lg p-2 mt-1 border"></label>
+            <span id="remote-unit-label" class="text-xs"></span>
+            <label class="text-xs">Horário da medição<input id="remote-time" type="datetime-local" step="1" required class="block rounded-lg p-2 mt-1 border"></label>
+            <label class="text-xs">Origem<select id="remote-source" class="block rounded-lg p-2 mt-1 border"><option value="manual">Manual</option><option value="device">Equipamento</option><option value="laboratory">Laboratório</option><option value="document">Documento revisado</option></select></label>
+            <label class="text-xs flex items-center gap-2"><input id="remote-confirm" type="checkbox" required>Revisei a observação e o destino selecionado</label>
+          </fieldset>
+          <button id="remote-save" type="submit" class="bg-red-700 rounded-lg p-2">Enviar observação revisada</button>
+        </form>
+        <h3 class="text-sm font-semibold">Histórico remoto do episódio · até 100 observações</h3>
+        <ol id="remote-history" class="text-xs space-y-2" aria-label="Observações confirmadas pelo servidor"></ol>
+      </div>
+    </div>
+  </details>
 
   <!-- PAINEL PRINCIPAL -->
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">

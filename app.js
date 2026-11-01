@@ -496,6 +496,7 @@ function markDirty() {
   }
 }
 document.querySelectorAll('textarea, input').forEach(input => input.addEventListener('input', () => {
+  if (input.closest('#remote-panel')) return;
   markDirty();
   capture();
   if (input.tagName === 'TEXTAREA' && input.id !== 'ocr-text') scheduleAutoScores();

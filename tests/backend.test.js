@@ -40,12 +40,61 @@ test('development server serves existing app assets under one origin and hides p
   const { base } = await fixture(t, {}, { staticRoot: require('node:path').resolve(__dirname, '..') });
   const page = await fetch(base + '/');
   assert.equal(page.status, 200); assert.match(await page.text(), /Osler \|/);
-  for (const file of ['app.js', 'score-ui.js', 'clinical-scores.js', 'osler-validation.js', 'osler-logo.svg', 'backend-client.js']) {
+  for (const file of ['app.js', 'score-ui.js', 'clinical-scores.js', 'osler-validation.js', 'osler-logo.svg', 'backend-client.js', 'remote-session.js', 'remote-ui.js']) {
     const asset = await fetch(base + '/' + file);
     assert.equal(asset.status, 200); assert.ok((await asset.text()).length > 0);
   }
   for (const path of ['/.env', '/server/index.js', '/ICU-Mind-Vercel-pronto.zip', '/.git/config']) {
     assert.equal((await fetch(base + path)).status, 401);
+  }
+});
+test('development login routes are opt-in, synthetic-only, same-origin and never accept extra fields', async t => {
+  const disabled = await fixture(t);
+  assert.deepEqual(await (await disabled.call('/api/auth/config')).json(), { enabled: false });
+  assert.equal((await disabled.call('/api/auth/login', { email: 'osler-synthetic-reader@example.com', password: 'synthetic' })).status, 404);
+  let logins = 0;
+  const enabled = await fixture(t, {
+    signIn: async () => { logins++; return { access_token: 'synthetic.session', expires_in: 3600, user: { id } }; },
+    signOut: async () => ({ signed_out: true })
+  }, { enableRemoteUI: true });
+  const credentials = { email: 'osler-synthetic-reader@example.com', password: 'synthetic' };
+  assert.equal((await enabled.call('/api/auth/login', { ...credentials, extra: 'forbidden' })).status, 400);
+  assert.equal((await enabled.call('/api/auth/login', { ...credentials, email: 'real@example.com' })).status, 400);
+  assert.equal((await enabled.call('/api/auth/login', credentials, { Origin: 'https://other.example.com' })).status, 403);
+  const response = await enabled.call('/api/auth/login', credentials, { Authorization: '' });
+  assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.equal(response.headers.get('set-cookie'), null);
+  assert.equal(logins, 1);
+  assert.equal((await enabled.call('/api/auth/logout', undefined, { Authorization: '' })).status, 401);
+  assert.equal((await enabled.call('/api/auth/logout', {})).status, 200);
+});
+test('Auth adapter uses official password grant, strips refresh tokens and supports 204 logout', async () => {
+  const requests = [];
+  const email = 'osler-synthetic-reader@example.com';
+  const store = createStore({ url: 'https://otnwkxchugsovtjdanyu.supabase.co', key: 'sb_publishable_synthetic',
+    fetchImpl: async (url, options) => {
+      requests.push({ url, options });
+      return url.pathname.endsWith('/logout') ? new Response(null, { status: 204 }) :
+        Response.json({ access_token: 'synthetic.session', refresh_token: 'never-forward-this', expires_in: 3600,
+          user: { id, email, user_metadata: { private: 'omit' } } });
+    } });
+  const session = await store.signIn(email, 'synthetic-password');
+  assert.deepEqual(session, { access_token: 'synthetic.session', expires_in: 3600, user: { id, email } });
+  assert.equal(requests[0].url.pathname, '/auth/v1/token');
+  assert.equal(requests[0].url.search, '?grant_type=password');
+  assert.equal(requests[0].options.headers.Authorization, undefined);
+  assert.deepEqual(await store.signOut(session.access_token), { signed_out: true });
+  assert.equal(requests[1].url.search, '?scope=local');
+  assert.equal(requests[1].options.headers.Authorization, 'Bearer synthetic.session');
+  const wrongProject = createStore({ url: 'https://other.supabase.co', key: 'sb_publishable_synthetic' });
+  await assert.rejects(wrongProject.signIn(email, 'synthetic-password'), error => error.status === 403);
+});
+test('Auth credential rejection hides provider details and outages remain failures', async () => {
+  for (const [status, expected] of [[400, 401], [422, 401], [403, 401], [500, 503]]) {
+    const store = createStore({ url: 'https://otnwkxchugsovtjdanyu.supabase.co', key: 'sb_publishable_synthetic',
+      fetchImpl: async () => new Response('private provider error and credentials', { status }) });
+    await assert.rejects(store.signIn('osler-synthetic-reader@example.com', 'synthetic-password'),
+      error => error.status === expected && !error.message.includes('private') && !error.message.includes('synthetic-password'));
   }
 });
 test('API writes confirmed data using authenticated RPC, preserving retry ID', async t => {

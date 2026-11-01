@@ -5,14 +5,14 @@
     if (typeof getAccessToken !== 'function') throw new Error('Session provider required');
     async function request(path, method = 'GET', body) {
       const token = await getAccessToken();
-      if (!token) throw new Error('Session required');
+      if (!token) { const error = new Error('Session required'); error.status = 401; throw error; }
       const response = await fetchImpl(path, {
         method, credentials: 'omit', cache: 'no-store', redirect: 'error',
         signal: AbortSignal.timeout(15000),
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         ...(body === undefined ? {} : { body: JSON.stringify(body) })
       });
-      if (!response.ok) throw new Error(`Osler API request failed (${response.status})`);
+      if (!response.ok) { const error = new Error(`Osler API request failed (${response.status})`); error.status = response.status; throw error; }
       return response.json();
     }
     return {

@@ -36,9 +36,11 @@ const staticAssets = {
   '/clinical-scores.js': ['clinical-scores.js', 'text/javascript; charset=utf-8'],
   '/osler-validation.js': ['osler-validation.js', 'text/javascript; charset=utf-8'],
   '/backend-client.js': ['backend-client.js', 'text/javascript; charset=utf-8'],
+  '/remote-session.js': ['remote-session.js', 'text/javascript; charset=utf-8'],
+  '/remote-ui.js': ['remote-ui.js', 'text/javascript; charset=utf-8'],
   '/osler-logo.svg': ['osler-logo.svg', 'image/svg+xml']
 };
-function createServer(store, { staticRoot } = {}) {
+function createServer(store, { staticRoot, enableRemoteUI = false } = {}) {
   return http.createServer(async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -55,10 +57,30 @@ function createServer(store, { staticRoot } = {}) {
       if (path.pathname === '/health' && req.method === 'GET') {
         res.end(JSON.stringify({ status: 'ok' })); return;
       }
+      if (path.pathname === '/api/auth/config' && req.method === 'GET') {
+        res.end(JSON.stringify({ enabled: enableRemoteUI })); return;
+      }
+      if (path.pathname.startsWith('/api/auth/') && !enableRemoteUI) throw new ApiError(404, 'Not found');
+      if (path.pathname.startsWith('/api/auth/') && req.method === 'POST') {
+        const origin = req.headers.origin;
+        if (req.headers['sec-fetch-site'] === 'cross-site' || (origin && new URL(origin).host !== req.headers.host)) {
+          throw new ApiError(403, 'Origin denied');
+        }
+      }
+      if (path.pathname === '/api/auth/login' && req.method === 'POST') {
+        const body = await readBody(req); fields(body, ['email', 'password']);
+        if (typeof body.email !== 'string' || !/^osler-synthetic-[a-z0-9-]+@example\.com$/.test(body.email) ||
+            typeof body.password !== 'string' || !body.password || body.password.length > 1024) throw new ApiError(400, 'Synthetic credentials required');
+        const session = await store.signIn(body.email, body.password);
+        res.end(JSON.stringify(session)); return;
+      }
       // Bearer-only API: never accept implicit cookie credentials or enable CORS.
       const match = /^Bearer ([A-Za-z0-9._~-]+)$/.exec(req.headers.authorization || '');
       if (!match || match[1].length > 8192) throw new ApiError(401, 'Session required');
       const token = match[1];
+      if (path.pathname === '/api/auth/logout' && req.method === 'POST') {
+        res.end(JSON.stringify(await store.signOut(token))); return;
+      }
       await store.authenticate(token);
       let result;
       if (path.pathname === '/api/units' && req.method === 'GET') {

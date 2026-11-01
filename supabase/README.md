@@ -1,6 +1,7 @@
 # Osler — development backend
 
-Not deployed. The existing UI, scores, OCR and IndexedDB remain unchanged.
+Not deployed. Existing scores, OCR, audio, backups and local IndexedDB remain available.
+An optional, separate panel now supports explicit remote persistence in development.
 Use synthetic data only. This is not clinical production readiness.
 
 ## Validate locally
@@ -54,7 +55,9 @@ Never run the test bootstrap on a Supabase project. CI runs both suites.
 
 ## API
 
-All `/api/*` requests require `Authorization: Bearer <user-access-token>`.
+Data `/api/*` requests require `Authorization: Bearer <user-access-token>`.
+`GET /api/auth/config` is public; opt-in `POST /api/auth/login` accepts synthetic
+credentials. `POST /api/auth/logout` requires the current access token.
 No cookie authentication, token logging or token persistence is added. Responses
 use `no-store`; writes accept JSON up to 16 KiB. Errors hide database details.
 
@@ -89,22 +92,73 @@ explicit superseding-event design.
 
 ## Opt-in UI integration
 
-`backend-client.js` is not loaded automatically. After an authenticated UI exists,
-load it explicitly and supply an in-memory session provider:
+The page loads `backend-client.js`, `remote-session.js` and `remote-ui.js`. The
+remote panel is disabled unless the development server is explicitly enabled:
 
-```js
-const backend = OslerBackend.createClient({
-  getAccessToken: async () => currentSession?.access_token
-});
+```powershell
+$env:OSLER_ENABLE_REMOTE_UI='1'
+node --env-file=.env.test server/index.js
 ```
 
-The UI must select an explicit unit/encounter, retain event IDs for retry and show
-remote failures. Never infer an encounter from bed number alone. No existing
-IndexedDB draft is automatically uploaded and failed remote writes never fall
-back silently to a local success state. Login/MFA UI, audited draft migration,
-pagination, attachments, operational audit, retention and backup restore remain
-separate work. Hosted end-to-end validation requires a configured development
-project and is not claimed by the local tests.
+Open `http://127.0.0.1:3000/`, expand **Persistência remota**, and log in with an
+officially provisioned synthetic account. The server refuses this feature for
+any project other than `otnwkxchugsovtjdanyu`, and accepts only publishable keys
+and `osler-synthetic-…@example.com` accounts. No signup route exists. The local
+static-only workflow still works when the API is absent or disabled.
+
+The UI uses same-origin password login and local-scope logout via the official
+Supabase Auth endpoints. Access tokens stay in memory only; no cookies, refresh
+tokens, localStorage, sessionStorage or IndexedDB session persistence is added.
+Reload requires login again. Expiry requires a new login, with sanitized errors;
+MFA and automatic renewal are not implemented. Issued JWTs can remain valid until
+expiration even after logout. Do not deploy this development login publicly.
+
+Select a unit and an episode explicitly, or deliberately create a new synthetic
+episode in that unit. The local bed selector does not choose a remote episode.
+The remote form accepts a reviewed numeric measurement, canonical unit, time
+and source; confirmation is required. Success appears only after the API returns
+the matching event ID, author, episode, value and unit. Refresh reads the latest
+100 remote records without updating local notes or clinical scores.
+
+An uncertain observation write retains its UUID and original payload in memory;
+retry uses the same payload even if form input changes. Destination and fields
+are locked until confirmed or explicitly discarded. An uncertain episode insert
+is recovered by its original UUID before retrying creation. Users are warned
+before discarding pending attempts, leaving the page or logging out with one.
+Pending IDs are lost on a forced reload: check the server history before creating
+another event. A same-account login after expiry can resume the in-memory attempt.
+
+No IndexedDB draft, image, audio or note is automatically uploaded. Remote fields
+are excluded from local draft capture. Remote failures never report local save as
+remote success. A reader's rejected write and an empty close response are errors,
+not confirmations. Closure requires an explicit action and confirmation dialog.
+
+Audited draft migration, pagination, attachments, institutional SSO/MFA, operational
+audit, retention and backup restoration remain separate work.
+
+### Real browser validation
+
+With the synthetic users, fixtures and write opt-in configured below, run:
+
+```sh
+node --env-file=.env.test scripts/test-remote-browser.js
+```
+
+This uses installed Chrome headless (Windows default path, or set `CHROME_PATH`),
+a temporary profile and an ephemeral loopback API against the authorized project.
+It verifies login/logout, explicit selection, reviewed persistence, simulated
+response loss after commit followed by an idempotent UI retry, closure, reader
+denial, no persisted browser session and byte-identical IndexedDB drafts. It
+retains a new synthetic observation and closes its generated episode. Sessions
+and the temporary profile are cleaned up, including on failure. Vendor CDN
+styles/icons/OCR libraries are blocked in this focused test; their network loading
+and OCR accuracy are not covered by it. Credentials and CDP payloads are not logged.
+
+Validation for this integration: 33 local tests passed, the real Chrome smoke
+check passed against development Auth/PostgREST, and the hosted write/isolation
+suite passed again. No synthetic episodes were left open. The browser check also
+confirmed that remote form interactions did not modify IndexedDB drafts; it waits
+for the existing local asynchronous score calculation before taking its baseline.
 
 ## Hosted development smoke checks
 

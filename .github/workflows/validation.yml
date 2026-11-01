@@ -18,6 +18,8 @@ jobs:
       - run: node --check clinical-scores.js
       - run: node --check osler-validation.js
       - run: node --check backend-client.js
+      - run: node --check remote-session.js
+      - run: node --check remote-ui.js
       - run: for f in server/*.js; do node --check "$f" || exit; done
   database:
     runs-on: ubuntu-latest
