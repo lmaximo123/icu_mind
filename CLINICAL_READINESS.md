@@ -1,7 +1,9 @@
 # Osler — implantação segura e critérios de aceite
 
 ## Estado atual (não validado para uso assistencial)
-Frontend estático, IndexedDB por navegador, OCR local Tesseract, cálculos determinísticos e revisão manual. Não existe servidor autenticado, banco central, agente multimodal ou monitoramento contínuo. Não carregar dados identificáveis de pacientes nesta versão.
+Frontend estático, IndexedDB por navegador, OCR local Tesseract, cálculos determinísticos e revisão manual. Há API autenticada e painel optativo de persistência remota somente no Supabase de desenvolvimento autorizado, com dados sintéticos; isso não constitui implantação clínica. Não há agente multimodal nem monitoramento contínuo. Não carregar dados identificáveis de pacientes nesta versão.
+
+O responsável relatou gravação de duas observações sintéticas, recarga da página, novo login e permanência dos registros no mesmo episódio remoto. A evidência e suas limitações estão em [supabase/README.md](supabase/README.md#manual-persistence-evidence-reported-by-the-owner). A proposta de conexão aos escores está em [docs/remote-score-proposal.md](docs/remote-score-proposal.md) e ainda não foi implementada.
 
 ## Arquitetura alvo
 1. Autenticação institucional (SSO/OIDC + MFA), RBAC por unidade e profissional; sessões curtas.

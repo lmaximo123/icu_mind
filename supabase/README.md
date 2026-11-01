@@ -160,6 +160,26 @@ suite passed again. No synthetic episodes were left open. The browser check also
 confirmed that remote form interactions did not modify IndexedDB drafts; it waits
 for the existing local asynchronous score calculation before taking its baseline.
 
+### Manual persistence evidence reported by the owner
+
+The owner reported the following manual validation after the UI integration:
+two synthetic observations were saved, the page was reloaded, a fresh login was
+performed, and both records remained available in the same remote episode.
+This is owner-reported evidence, separate from the automated browser test; the
+agent did not independently repeat or inspect that particular manual session.
+No observation IDs, episode/unit IDs, execution timestamp or browser version were
+provided, so none are inferred or recorded here. No credentials are recorded.
+
+This supports persistence across page reload and reauthentication for the tested
+episode. It does not establish backup restoration, cross-device behavior,
+isolation for other accounts, score correctness or clinical readiness. The
+authorized development scope remains project `otnwkxchugsovtjdanyu` and branch
+`develop/osler-secure-foundation`.
+
+The next proposed integration is described in
+[Remote observations and score preview proposal](../docs/remote-score-proposal.md).
+It is a proposal awaiting review; no remote-to-score bridge has been implemented.
+
 ## Hosted development smoke checks
 
 Only use project `otnwkxchugsovtjdanyu` on branch
