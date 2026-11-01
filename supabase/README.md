@@ -146,10 +146,19 @@ node --env-file=.env.test scripts/test-remote-browser.js
 
 This uses installed Chrome headless (Windows default path, or set `CHROME_PATH`),
 a temporary profile and an ephemeral loopback API against the authorized project.
-It verifies login/logout, explicit selection, reviewed persistence, simulated
-response loss after commit followed by an idempotent UI retry, closure, reader
-denial, no persisted browser session and byte-identical IndexedDB drafts. It
-retains a new synthetic observation and closes its generated episode. Sessions
+It verifies login/logout, explicit selection, two reviewed observations in A,
+simulated response loss after commit followed by an idempotent UI retry, a real
+page reload, fresh login and recovery of the exact same two event IDs and payloads
+in the original episode. It also creates a separate episode in B using the same
+bed label and verifies bidirectional isolation. UI selectors exclude the other
+unit; explicit requests from the authenticated browser cannot read, append,
+create or close records across units. Reader checks run while A is still open:
+read succeeds but observation append, episode creation and closure fail.
+
+The suite also verifies no persisted browser session and byte-identical local
+IndexedDB drafts. It retains three new synthetic observations across two new
+episodes, then closes only those generated episodes. Existing records are not
+modified. Sessions
 and the temporary profile are cleaned up, including on failure. Vendor CDN
 styles/icons/OCR libraries are blocked in this focused test; their network loading
 and OCR accuracy are not covered by it. Credentials and CDP payloads are not logged.
@@ -159,6 +168,31 @@ check passed against development Auth/PostgREST, and the hosted write/isolation
 suite passed again. No synthetic episodes were left open. The browser check also
 confirmed that remote form interactions did not modify IndexedDB drafts; it waits
 for the existing local asynchronous score calculation before taking its baseline.
+
+The expanded browser persistence/isolation suite was executed successfully with
+the three configured synthetic accounts against `otnwkxchugsovtjdanyu`. All
+scenarios above passed, as did the 33 local tests. Reload was verified to create
+a new document, clear the UI session and require a fresh login and explicit
+unit/episode selection; it did not trigger another observation write. Both event
+IDs, all returned observation fields and the rendered history matched the
+pre-reload baseline. The same-bed episodes in A and B retained their respective
+records unchanged after both cross-unit and reader mutation attempts. Both owners
+then closed their own episodes, with cleanup also completing successfully.
+This automated evidence is separate from the owner's manual report below.
+Post-run database inspection confirmed the two newly generated same-bed episodes
+were closed. An older episode in the fixture unit was still open and was left
+untouched; cleanup does not close pre-existing episodes or delete observations.
+
+Limitations: one installed Chrome headless browser and one development API
+instance, not a cross-device or multi-browser test. It does not cover backup
+restoration, MFA, refresh-token renewal, immediate JWT revocation, clinical score
+validity or production behavior. Cross-unit forged requests use browser `fetch`
+with the session obtained from the real UI login; they are distinct from normal
+UI selection actions. Assertions compare data in memory without logging tokens,
+passwords, CDP payloads or observation response bodies. The first write's lost
+response is deliberately injected in the test server after the real database
+commit; the persistence and authorization checks otherwise use real hosted Auth
+and PostgREST.
 
 ### Manual persistence evidence reported by the owner
 

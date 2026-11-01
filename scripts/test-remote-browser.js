@@ -6,6 +6,7 @@ const path = require('node:path');
 const os = require('node:os');
 const { spawn } = require('node:child_process');
 const { once } = require('node:events');
+const { randomUUID } = require('node:crypto');
 const { createServer } = require('../server/app.js');
 const { createStore, ApiError } = require('../server/supabase.js');
 const { configuration } = require('./test-hosted-writes.js');
@@ -26,10 +27,13 @@ async function main() {
   const store = createStore({ url: fixtures.projectUrl, key });
   const created = [];
   const sessionTokens = new Set();
+  const sessionsByEmail = new Map();
+  let activeUser;
   let writes = 0, loseResponse = true;
   const wrappedStore = { ...store,
     signIn: async (...args) => {
-      const session = await store.signIn(...args); sessionTokens.add(session.access_token); return session;
+      const session = await store.signIn(...args);
+      sessionTokens.add(session.access_token); sessionsByEmail.set(session.user.email, session.access_token); return session;
     },
     signOut: async token => { const result = await store.signOut(token); sessionTokens.delete(token); return result; },
     createEncounter: async (token, body) => {
@@ -63,7 +67,9 @@ async function main() {
     if (result.exceptionDetails) throw new Error('Browser evaluation failed');
     return result.result.value;
   }
-  const waitFor = expression => until(() => evaluate(expression));
+  const waitFor = expression => until(async () => {
+    try { return await evaluate(expression); } catch { return false; } // Reload can replace the execution context between polls.
+  });
   async function change(id, value) {
     await evaluate(`(()=>{const el=document.getElementById(${JSON.stringify(id)});el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   }
@@ -73,6 +79,52 @@ async function main() {
     await click('remote-login-button');
     await waitFor(`!document.getElementById('remote-workspace').hidden && !document.getElementById('remote-refresh').disabled`);
     assert.equal(await evaluate(`document.getElementById('remote-password').value`), '');
+    activeUser = user;
+  }
+  async function logout() {
+    await click('remote-logout');
+    await waitFor(`document.getElementById('remote-account').hidden && !document.getElementById('remote-login-button').disabled`);
+    activeUser = null;
+  }
+  async function selectUnit(id) {
+    await change('remote-unit', id);
+    await waitFor(`!document.getElementById('remote-encounter').disabled`);
+  }
+  async function selectEpisode(id) {
+    await change('remote-encounter', id);
+    await waitFor(`!document.getElementById('remote-refresh').disabled && document.getElementById('remote-status').textContent.includes('Episódio selecionado')`);
+  }
+  async function browserApi(endpoint, method = 'GET', body) {
+    assert.ok(activeUser);
+    // Reuse the session created by this user's real UI login, in memory only.
+    // The CDP expression and response bodies are never logged.
+    assert.ok(endpoint.startsWith('/api/encounters') || endpoint.startsWith('/api/observations'));
+    const init = { method, credentials: 'omit', cache: 'no-store', redirect: 'error',
+      headers: { Authorization: `Bearer ${sessionsByEmail.get(activeUser.email)}`, 'Content-Type': 'application/json' },
+      ...(body ? { body: JSON.stringify(body) } : {}) };
+    return evaluate(`fetch(${JSON.stringify(endpoint)},${JSON.stringify(init)}).then(async r=>({status:r.status,body:await r.json()}))`);
+  }
+  const visibleHistory = () => evaluate(`Array.from(document.getElementById('remote-history').children).map(row=>row.textContent).sort()`);
+  async function saveReviewed(value) {
+    await change('remote-value', value);
+    await evaluate(`document.getElementById('remote-confirm').checked=true`);
+    await click('remote-save');
+    await waitFor(`document.getElementById('remote-status').textContent.includes('Gravação confirmada') && !document.getElementById('remote-save').disabled`);
+  }
+  async function assertIsolation(otherUnit, otherEpisode, sample) {
+    const episodes = await browserApi('/api/encounters?unit_id=' + otherUnit);
+    assert.equal(episodes.status, 200); assert.deepEqual(episodes.body, []);
+    const observations = await browserApi('/api/observations?encounter_id=' + otherEpisode);
+    assert.equal(observations.status, 200); assert.deepEqual(observations.body, []);
+    assert.equal((await browserApi('/api/encounters', 'POST', {
+      id: randomUUID(), unit_id: otherUnit, bed_code: '989'
+    })).status, 403);
+    assert.equal((await browserApi('/api/observations', 'POST', {
+      id: randomUUID(), encounter_id: otherEpisode, concept: 'ph', value: 7.4,
+      unit: '', timestamp: sample.measured_at, confirmed: true, source_type: 'manual'
+    })).status, 403);
+    const close = await browserApi('/api/encounters/' + otherEpisode + '/close', 'POST', {});
+    assert.equal(close.status, 200); assert.deepEqual(close.body, []);
   }
   const localDrafts = () => evaluate(`new Promise((resolve,reject)=>{const r=indexedDB.open('icu-mind-local');r.onerror=()=>reject();r.onsuccess=()=>{const db=r.result;const q=db.transaction('beds','readonly').objectStore('beds').getAll();q.onsuccess=()=>{db.close();resolve(JSON.stringify(q.result));};q.onerror=()=>{db.close();reject();};};})`);
   function checkDrafts(actual, expected) {
@@ -154,26 +206,97 @@ async function main() {
     checkDrafts(await localDrafts(), draftsBefore);
     stage = 'browser no persisted session assertion';
     assert.equal(await evaluate(`localStorage.length + sessionStorage.length`), 0);
-    stage = 'browser episode closure and logout';
-    await click('remote-close');
-    await waitFor(`document.getElementById('remote-status').textContent.includes('Encerramento confirmado')`);
-    assert.equal(await evaluate(`document.getElementById('remote-save').disabled`), true);
-    await click('remote-logout');
-    await waitFor(`document.getElementById('remote-account').hidden && !document.getElementById('remote-login-button').disabled`);
-    assert.equal(await evaluate(`document.getElementById('remote-user').textContent`), '');
-    assert.equal(await localDrafts(), draftsBefore);
+    stage = 'browser second reviewed observation';
+    await saveReviewed('7,35');
+    assert.equal(writes, 3); // Lost first response, retry, then a second distinct observation.
+    const beforeReload = await browserApi('/api/observations?encounter_id=' + encounterId);
+    assert.equal(beforeReload.status, 200); assert.equal(beforeReload.body.length, 2);
+    assert.equal(new Set(beforeReload.body.map(row => row.id)).size, 2);
+    const historyBeforeReload = await visibleHistory();
+    assert.equal(historyBeforeReload.length, 2);
+    console.log('PASS: UI login, two reviewed writes, lost-response retry without duplicate IDs.');
+
+    stage = 'browser reload, fresh login and recovery of exact records';
+    const documentMarker = randomUUID();
+    await evaluate(`document.documentElement.dataset.testDocument=${JSON.stringify(documentMarker)}`);
+    await send('Page.reload', { ignoreCache: true });
+    activeUser = null;
+    await waitFor(`document.documentElement.dataset.testDocument!==${JSON.stringify(documentMarker)} && !!document.getElementById('remote-content') && !document.getElementById('remote-content').hidden && document.getElementById('persistence-status').textContent.includes('navegador')`);
+    await evaluate(`document.getElementById('remote-panel').open=true`);
+    assert.equal(await evaluate(`document.getElementById('remote-account').hidden`), true);
+    assert.equal(await evaluate(`document.getElementById('remote-workspace').hidden`), true);
+    assert.equal(await evaluate(`localStorage.length + sessionStorage.length`), 0);
+    await login(users[1]);
+    assert.equal(await evaluate(`document.getElementById('remote-unit').value`), '');
+    assert.equal(await evaluate(`document.getElementById('remote-encounter').value`), '');
+    await selectUnit(fixtures.unitA); await selectEpisode(encounterId);
+    const recovered = await browserApi('/api/observations?encounter_id=' + encounterId);
+    assert.equal(recovered.status, 200);
+    assert.deepEqual(recovered.body, beforeReload.body);
+    assert.deepEqual(await visibleHistory(), historyBeforeReload);
+    assert.equal(writes, 3);
+    checkDrafts(await localDrafts(), draftsBefore);
+    console.log('PASS: real page reload clears the UI session; fresh login and explicit selection recover both original IDs and unchanged payloads in the same episode.');
+
+    stage = 'browser unit B login and same-bed episode';
+    await logout(); await login(users[2]);
+    assert.equal(await evaluate(`Array.from(document.getElementById('remote-unit').options).some(o=>o.value===${JSON.stringify(fixtures.unitA)})`), false);
+    await selectUnit(fixtures.unitB);
+    await change('remote-bed', bed); await click('remote-create-button');
+    await waitFor(`document.getElementById('remote-status').textContent.includes('Novo episódio confirmado')`);
+    const episodeB = await evaluate(`document.getElementById('remote-encounter').value`);
+    assert.notEqual(episodeB, encounterId);
+    await saveReviewed('7,3');
+    const recordsB = await browserApi('/api/observations?encounter_id=' + episodeB);
+    assert.equal(recordsB.status, 200); assert.equal(recordsB.body.length, 1);
+    stage = 'browser unit B cannot read, write or close unit A';
+    await assertIsolation(fixtures.unitA, encounterId, beforeReload.body[0]);
+    await logout(); await login(users[1]);
+    assert.equal(await evaluate(`Array.from(document.getElementById('remote-unit').options).some(o=>o.value===${JSON.stringify(fixtures.unitB)})`), false);
+    await selectUnit(fixtures.unitA); await selectEpisode(encounterId);
+    const episodesA = await browserApi('/api/encounters?unit_id=' + fixtures.unitA);
+    assert.equal(episodesA.body.find(row => row.id === encounterId)?.ended_at, null);
+    stage = 'browser unit A cannot read, write or close unit B';
+    await assertIsolation(fixtures.unitB, episodeB, recordsB.body[0]);
+    console.log('PASS: two units with the same bed label remain separate; bidirectional forged read/write/closure requests from the browser are rejected or return no accessible rows.');
+    await logout();
+
     stage = 'browser reader denial';
-    await login(users[0]); await change('remote-unit', fixtures.unitA);
-    await waitFor(`!document.getElementById('remote-encounter').disabled`);
-    await change('remote-encounter', encounterId);
-    await waitFor(`document.getElementById('remote-history').textContent.includes('7.4')`);
+    await login(users[0]); await selectUnit(fixtures.unitA); await selectEpisode(encounterId);
+    assert.deepEqual(await visibleHistory(), historyBeforeReload);
+    assert.equal(await evaluate(`Array.from(document.getElementById('remote-unit').options).some(o=>o.value===${JSON.stringify(fixtures.unitB)})`), false);
+    await change('remote-value', '7,2');
+    await evaluate(`document.getElementById('remote-confirm').checked=true`);
+    await click('remote-save');
+    await waitFor(`document.getElementById('remote-status').textContent.includes('Sem permissão') && !document.getElementById('remote-discard').disabled`);
+    await click('remote-discard');
     await change('remote-bed', '997'); await click('remote-create-button');
-    await waitFor(`document.getElementById('remote-status').textContent.includes('Sem permissão')`);
-    assert.equal(created.length, 1);
-    await click('remote-discard'); await click('remote-logout');
-    await waitFor(`document.getElementById('remote-account').hidden && !document.getElementById('remote-login-button').disabled`);
-    assert.equal(await localDrafts(), draftsBefore);
-    console.log('PASS: real Chromium login/logout, explicit unit/episode, reviewed write, lost-response retry, closure, reader denial and unchanged IndexedDB drafts.');
+    await waitFor(`document.getElementById('remote-status').textContent.includes('Sem permissão') && !document.getElementById('remote-discard').disabled`);
+    assert.equal(created.length, 2);
+    await click('remote-discard'); await click('remote-close');
+    await waitFor(`!document.getElementById('remote-close').disabled && document.getElementById('remote-status').className.includes('amber')`);
+    assert.ok(!(await evaluate(`document.getElementById('remote-status').textContent`)).includes('Encerramento confirmado'));
+    const readerRecords = await browserApi('/api/observations?encounter_id=' + encounterId);
+    assert.deepEqual(readerRecords.body, beforeReload.body);
+    console.log('PASS: reader can recover the two observations but cannot append, create an episode or close the open episode.');
+    await logout();
+
+    stage = 'browser owner verification and closure';
+    for (const [user, unitId, id, expected] of [[users[1], fixtures.unitA, encounterId, beforeReload.body], [users[2], fixtures.unitB, episodeB, recordsB.body]]) {
+      await login(user); await selectUnit(unitId); await selectEpisode(id);
+      const episodes = await browserApi('/api/encounters?unit_id=' + unitId);
+      assert.equal(episodes.body.find(row => row.id === id)?.ended_at, null);
+      const records = await browserApi('/api/observations?encounter_id=' + id);
+      assert.deepEqual(records.body, expected);
+      await click('remote-close');
+      await waitFor(`document.getElementById('remote-status').textContent.includes('Encerramento confirmado')`);
+      assert.equal(await evaluate(`document.getElementById('remote-save').disabled`), true);
+      await logout();
+    }
+    checkDrafts(await localDrafts(), draftsBefore);
+    assert.equal(await evaluate(`document.getElementById('remote-user').textContent`), '');
+    assert.equal(await evaluate(`localStorage.length + sessionStorage.length`), 0);
+    console.log('PASS: both owners confirm unchanged records and close only their new episodes; local IndexedDB drafts remain unchanged.');
   } finally {
     // Only close episodes generated by this invocation; retain immutable events.
     const cleanup = await Promise.allSettled(created.map(row => store.closeEncounter(row.token, row.id)));
@@ -187,5 +310,6 @@ async function main() {
     await fs.rm(resolved, { recursive: true, force: true, maxRetries: 20, retryDelay: 200 });
     if ([...cleanup, ...logout].some(row => row.status === 'rejected')) throw new Error('Synthetic episode or session cleanup failed');
   }
+  console.log('Browser persistence and isolation suite passed; new synthetic records retained, generated episodes closed and sessions/profile cleaned up.');
 }
 main().catch(() => { console.error(`Browser integration failed at: ${stage}. Credentials and browser payloads suppressed.`); process.exitCode = 1; });
