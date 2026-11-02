@@ -63,8 +63,9 @@ function scheduleSave() {
   saveTimer = setTimeout(saveDraftsNow, 250);
 }
 function exportBackup() {
+  if (!window.confirm('Exportar rascunhos sintéticos deste navegador? O arquivo JSON não é criptografado e deve ser protegido. Não use dados clínicos reais.')) return;
   capture();
-  const payload = { app: 'ICU-Mind', version: 1, exportedAt: new Date().toISOString(), beds: [...drafts.entries()].map(([bed, data]) => ({ bed, data })) };
+  const payload = { app: 'ICU-Mind', version: 1, exportedAt: new Date().toISOString(), beds: [...drafts.entries()].map(([bed, data]) => ({ bed, data: { ...data, audioUrl: null } })) };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = `icu-mind-backup-${new Date().toISOString().slice(0,10)}.json`; a.click();
@@ -73,9 +74,27 @@ function exportBackup() {
 async function importBackup(file) {
   if (!file) return;
   try {
+    if (file.size>5*1024*1024) throw new Error('Backup acima do limite');
     const payload = JSON.parse(await file.text());
-    if (payload.app !== 'ICU-Mind' || !Array.isArray(payload.beds)) throw new Error('Arquivo incompatível');
-    payload.beds.forEach(item => { if (/^\d{2}$/.test(item.bed) && item.data && typeof item.data === 'object') drafts.set(item.bed, item.data); });
+    const check = (value,depth=0) => {
+      if(depth>30)throw new Error('Backup inválido');
+      if(value && typeof value==='object')for(const key of Object.keys(value)){
+        if(['__proto__','prototype','constructor'].includes(key))throw new Error('Backup inválido');
+        check(value[key],depth+1);
+      }
+    };
+    check(payload);
+    if (payload.app !== 'ICU-Mind' || !Array.isArray(payload.beds) || payload.beds.length>100) throw new Error('Arquivo incompatível');
+    if(!payload.beds.every(item=>item && /^\d{2}$/.test(item.bed) && item.data && typeof item.data==='object' && !Array.isArray(item.data))) throw new Error('Arquivo incompatível');
+    for(const item of payload.beds){
+      for(const key of ['fields','notes','ocr']){
+        const value=item.data[key];
+        if(value!==undefined && (!value || typeof value!=='object' || Array.isArray(value) || Object.values(value).some(text=>typeof text!=='string' || text.length>50000))) throw new Error('Arquivo incompatível');
+      }
+      if(item.data.devices!==undefined && (!Array.isArray(item.data.devices) || item.data.devices.some(value=>typeof value!=='boolean')))throw new Error('Arquivo incompatível');
+    }
+    if (!window.confirm('Importar rascunhos sintéticos? Leitos presentes no arquivo substituirão os rascunhos locais correspondentes. Nada será enviado ao servidor.')) return;
+    payload.beds.forEach(item => drafts.set(item.bed,{...item.data,fields:item.data.fields || {},notes:item.data.notes || {},ocr:item.data.ocr || {},devices:item.data.devices || [],audioUrl:null}));
     selectBed(currentBed);
     const saved = await saveDraftsNow();
     $('persistence-status').textContent = saved ? 'Backup importado e salvo neste navegador' : 'Backup importado na sessão, mas não foi salvo. Exporte um backup.';
@@ -272,6 +291,8 @@ async function processarFotoOCR() {
   try {
     $('upload-status').textContent = 'Carregando leitor OCR em português…';
     worker = await Tesseract.createWorker('por', 1, {
+      workerPath: '/vendor/worker.min.js', corePath: '/vendor', langPath: '/vendor',
+      cacheMethod: 'none', // No OCR model or image persistence in IndexedDB.
       logger: message => {
         if (message.status === 'recognizing text') $('upload-status').textContent = 'Reconhecendo texto… ' + Math.round(message.progress * 100) + '%';
       }

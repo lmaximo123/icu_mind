@@ -22,6 +22,7 @@ sql() { docker_local exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres
 sql < supabase/tests/bootstrap.sql
 for migration in supabase/migrations/*.sql; do sql < "$migration"; done
 sql < supabase/tests/security.sql
+sql < supabase/tests/advanced-security.sql
 sql < supabase/tests/durability.sql
 docker_local restart "$container" >/dev/null
 ready=false

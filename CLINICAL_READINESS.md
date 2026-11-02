@@ -25,7 +25,7 @@ O responsável relatou gravação de duas observações sintéticas, recarga da 
 - Procedimentos de resposta a incidentes, governança de modelo e análise regulatória/ética.
 
 ## Testes disponíveis
-Execute `node --test tests/osler-validation.test.js` em ambiente Node.js >=18. Esses testes cobrem apenas o módulo de validação conservadora e não demonstram segurança ou eficácia clínica do produto.
+Execute `npm ci --ignore-scripts`, `npm run build` e `node --test tests/*.test.js` com Node.js >=22. Há também testes de navegador e Auth sintéticos e restauração em PostgreSQL isolado. Evidências, controles ativos versus preparados e bloqueios estão em [docs/security-foundation.md](docs/security-foundation.md). A migração adicional de MFA/auditoria/correções não teve aplicação remota confirmada devido à falha OAuth do conector. Nenhum desses resultados demonstra aptidão para dados reais, conformidade LGPD ou eficácia clínica.
 
 ## Limitações matemáticas
 Repetição da mesma fórmula não produz verificações independentes. Erros correlacionados, viés de extração, mudança de população e dados de origem errados persistem mesmo quando múltiplos algoritmos concordam. Não é possível demonstrar erro clínico nulo; mensurar desempenho, intervalos de confiança, calibração e taxa de abstenção em dados independentes.

@@ -42,6 +42,10 @@
     $('remote-email').disabled = state.busy;
     $('remote-password').disabled = state.busy;
     $('remote-logout').disabled = state.busy;
+    $('remote-renew').disabled = state.busy || !connected;
+    $('remote-mfa').hidden=!connected || !state.factors?.length;
+    $('remote-mfa-button').disabled=state.busy;
+    options($('remote-factor'),state.factors || [],(state.factors || [])[0]?.id || '', 'Selecione',row=>'Autenticador '+row.id.slice(0,8));
     options($('remote-unit'), state.units, state.unitId, 'Selecione uma unidade', row => row.label);
     options($('remote-encounter'), state.encounters, state.encounterId, 'Selecione um episódio',
       row => `Leito ${row.bed_code} · ${dateLabel(row.started_at)} · ${row.ended_at ? 'encerrado' : 'aberto'} · ${row.id}`);
@@ -96,6 +100,11 @@
     $('remote-password').value = ''; attempt(controller.logout());
   });
   $('remote-unit').addEventListener('change', () => attempt(controller.selectUnit($('remote-unit').value)));
+  $('remote-renew').addEventListener('click',()=>attempt(controller.renewSession()));
+  $('remote-mfa').addEventListener('submit',event=>{
+    event.preventDefault(); const code=$('remote-mfa-code').value; $('remote-mfa-code').value='';
+    attempt(controller.verifyMfa($('remote-factor').value,code));
+  });
   $('remote-encounter').addEventListener('change', () => attempt(controller.selectEncounter($('remote-encounter').value)));
   $('remote-refresh').addEventListener('click', () => attempt(controller.refresh()));
   $('remote-create').addEventListener('submit', event => { event.preventDefault(); attempt(controller.createEncounter($('remote-bed').value.trim())); });

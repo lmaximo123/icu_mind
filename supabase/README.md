@@ -6,7 +6,9 @@ Use synthetic data only. This is not clinical production readiness.
 
 ## Validate locally
 
-Requirements: Node.js >=22, Bash, Docker with a local daemon. No npm dependencies.
+Requirements: Node.js >=22. Run `npm ci --ignore-scripts` and `npm run build`
+before serving. The optional native database runner requires Bash/Docker;
+`node scripts/test-restore.js` uses isolated PostgreSQL WASM without them.
 
 ```sh
 node --test tests/*.test.js
@@ -70,7 +72,10 @@ use `no-store`; writes accept JSON up to 16 KiB. Errors hide database details.
 | GET | `/api/observations?encounter_id=<uuid>` | Explicit encounter |
 | POST | `/api/observations` | Confirmed observation |
 
-Lists return the latest 100 rows, not a complete history export. Inaccessible IDs
+Lists return up to 100 rows by default, not a complete history export. Lists
+can also be queried in bounded pages using `limit` (1–100) and `offset`
+(0–100000), with stable UUID tie-break ordering. Lists remain bounded by default.
+Inaccessible IDs
 yield empty lists. Closing an inaccessible/already closed encounter returns an
 empty list; do not treat this as a new successful update. Duplicate encounter
 creation returns a conflict; resolve against the existing ID instead of opening
@@ -87,8 +92,11 @@ the encounter to serialize with closure and validates membership, value, unit an
 time. Identical retries return the original event, including after closure;
 changed payloads with the same ID fail. Measurements before encounter creation or
 new writes after closure fail. UPDATE/DELETE privileges are revoked; an additional
-trigger prevents accidental privileged mutation. Corrections need a future
-explicit superseding-event design.
+trigger prevents accidental privileged mutation. An additive correction RPC and
+`POST /api/observations/correct` are now prepared and tested locally: the original
+is preserved, the replacement is another validated event and a reason-code link
+records provenance. This requires the pending security migration below; it is
+not claimed as active remotely and has no automatic correction UI.
 
 ## Opt-in UI integration
 
@@ -108,10 +116,17 @@ static-only workflow still works when the API is absent or disabled.
 
 The UI uses same-origin password login and local-scope logout via the official
 Supabase Auth endpoints. Access tokens stay in memory only; no cookies, refresh
-tokens, localStorage, sessionStorage or IndexedDB session persistence is added.
-Reload requires login again. Expiry requires a new login, with sanitized errors;
-MFA and automatic renewal are not implemented. Issued JWTs can remain valid until
-expiration even after logout. Do not deploy this development login publicly.
+tokens in the browser, localStorage, sessionStorage or IndexedDB session
+persistence is added. A bounded server-only memory vault retains refresh tokens
+for a technical maximum of two hours from login, coalesces concurrent renewal
+and rotates issued material. Automatic renewal before expiry and an explicit
+renew button use `/api/auth/refresh`; restarting the server loses this vault and
+requires login again. Reload still requires login. Existing verified TOTP factors
+can be challenged through `/api/auth/mfa` and the UI; enrollment/recovery remain
+controlled official Auth operations, not public signup. Issued JWTs can remain
+valid until expiration after logout on the legacy synthetic fixtures. The pending
+protected-unit database policy additionally checks active Auth sessions. Do not
+deploy this synthetic-only login publicly.
 
 Select a unit and an episode explicitly, or deliberately create a new synthetic
 episode in that unit. The local bed selector does not choose a remote episode.
@@ -133,8 +148,9 @@ are excluded from local draft capture. Remote failures never report local save a
 remote success. A reader's rejected write and an empty close response are errors,
 not confirmations. Closure requires an explicit action and confirmation dialog.
 
-Audited draft migration, pagination, attachments, institutional SSO/MFA, operational
-audit, retention and backup restoration remain separate work.
+Audited draft migration, pagination controls in the UI, attachments, institutional
+SSO/MFA/recovery policies, external audit retention and hosted backup restoration
+remain separate work. See [security report](../docs/security-foundation.md).
 
 ### Real browser validation
 
@@ -159,9 +175,13 @@ The suite also verifies no persisted browser session and byte-identical local
 IndexedDB drafts. It retains three new synthetic observations across two new
 episodes, then closes only those generated episodes. Existing records are not
 modified. Sessions
-and the temporary profile are cleaned up, including on failure. Vendor CDN
-styles/icons/OCR libraries are blocked in this focused test; their network loading
-and OCR accuracy are not covered by it. Credentials and CDP payloads are not logged.
+and the temporary profile are cleaned up, including on failure. Assets are now
+self-hosted. The browser also recognizes a generated synthetic PNG through the
+local Portuguese OCR worker/model/WASM, records fake-device audio, exercises real
+TOTP step-up with an execution-owned temporary factor, renews the session and
+checks no external HTTP origin or credential/clinical data in API audit events.
+This is a functional OCR check, not an OCR accuracy validation dataset. Credentials,
+TOTP secrets/codes and CDP payloads are not logged or persisted.
 
 Validation for this integration: 33 local tests passed, the real Chrome smoke
 check passed against development Auth/PostgREST, and the hosted write/isolation

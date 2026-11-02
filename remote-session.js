@@ -4,14 +4,14 @@
   const backend = typeof module !== 'undefined' && module.exports ? require('./backend-client.js') : root.OslerBackend;
   const validation = typeof module !== 'undefined' && module.exports ? require('./osler-validation.js') : root.OslerValidation;
   function createController({ fetchImpl = root.fetch.bind(root), uuid = () => root.crypto.randomUUID(), now = () => Date.now(), onChange = () => {} } = {}) {
-    let token = null, expiry = 0, timer;
+    let token = null, expiry = 0, timer, refreshing, refreshingToken;
     const state = { user: null, expired: false, busy: false, units: [], unitId: '', encounters: [], encounterId: '',
-      observations: [], pending: null, pendingEncounter: null, savedId: '', message: '', error: false };
+      observations: [], factors: [], pending: null, pendingEncounter: null, savedId: '', message: '', error: false };
     const snapshot = () => JSON.parse(JSON.stringify(state));
     const emit = () => onChange(snapshot());
     function expire() { token = null; state.expired = true; state.message = 'Sessão expirada. Entre novamente para continuar.'; state.error = true; emit(); }
     const api = backend.createClient({ fetchImpl, getAccessToken: async () => {
-      if (token && now() >= expiry) expire();
+      if (token && now() >= expiry) { try { await renew(); } catch { expire(); } }
       return token;
     } });
     async function auth(path, body, accessToken) {
@@ -22,6 +22,24 @@
       });
       if (!response.ok) { const error = new Error('Auth request failed'); error.status = response.status; throw error; }
       return response.json();
+    }
+    function setSession(session) {
+      if (!session.access_token || session.user?.id !== state.user?.id || !Number.isFinite(session.expires_in) || session.expires_in<=0) throw new Error('Invalid session');
+      token=session.access_token; expiry=now()+session.expires_in*1000; state.expired=false;
+      state.factors=session.factors || state.factors;
+      clearTimeout(timer);
+      const scheduledToken=token;
+      timer=setTimeout(() => { void renew().catch(() => { if(token===scheduledToken)expire(); }); },Math.max(1000,Math.min(session.expires_in*1000-30000,2147483647)));
+      timer.unref?.();
+    }
+    async function renew() {
+      if (!token) { const error=new Error('Session required'); error.status=401; throw error; }
+      if (refreshing && refreshingToken===token) return refreshing;
+      const old=token;
+      refreshingToken=old;
+      const operation=auth('refresh',null,old).then(session => { if(token===old) { setSession(session); emit(); } }).finally(()=>{if(refreshing===operation){refreshing=null;refreshingToken=null;}});
+      refreshing=operation;
+      return refreshing;
     }
     function requireSession() { if (!token || state.expired) { const error = new Error('Session required'); error.status = 401; throw error; } }
     function unresolved() { return state.pending || state.pendingEncounter; }
@@ -59,9 +77,7 @@
           await auth('logout', null, session.access_token);
           invalid('Há uma tentativa pendente de outra conta. Entre com a conta original ou descarte a tentativa após conferir o servidor.');
         }
-        token = session.access_token; expiry = now() + session.expires_in * 1000;
-        clearTimeout(timer); timer = setTimeout(expire, Math.min(session.expires_in * 1000, 2147483647)); timer.unref?.();
-        state.user = session.user; state.expired = false; state.observations = [];
+        state.user = session.user; state.factors=session.factors || []; setSession(session); state.observations = [];
         if (!unresolved()) { state.unitId = ''; state.encounterId = ''; state.encounters = []; }
         state.units = await api.listUnits();
         if (state.unitId) {
@@ -73,12 +89,18 @@
       logout: () => run(async () => {
         const accessToken = token;
         token = null; clearTimeout(timer);
-        Object.assign(state, { user: null, expired: false, units: [], unitId: '', encounters: [], encounterId: '', observations: [], pending: null, pendingEncounter: null, savedId: '' });
+        Object.assign(state, { user: null, expired: false, factors: [], units: [], unitId: '', encounters: [], encounterId: '', observations: [], pending: null, pendingEncounter: null, savedId: '' });
         try {
           if (accessToken) { await auth('logout', null, accessToken); state.message = 'Sessão removida desta tela e logout confirmado pelo servidor.'; }
           else state.message = 'Sessão removida desta tela. A sessão expirada não foi revogada no servidor.';
         }
         catch { state.error = true; state.message = 'Sessão removida desta tela. O servidor não confirmou o logout; o token emitido pode continuar válido até expirar.'; }
+      }),
+      renewSession: () => run(async()=>{ requireSession(); await renew(); state.message='Sessão renovada pelo servidor.'; }),
+      verifyMfa: (factorId,code) => run(async()=>{
+        requireSession(); const session=await auth('mfa',{factor_id:factorId,code},token);
+        setSession(session); state.units=await api.listUnits();
+        state.message='MFA confirmado. Selecione explicitamente a unidade protegida.';
       }),
       selectUnit: id => run(async () => {
         requireSession(); requireResolved();

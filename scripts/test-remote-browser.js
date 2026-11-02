@@ -7,6 +7,7 @@ const os = require('node:os');
 const { spawn } = require('node:child_process');
 const { once } = require('node:events');
 const { randomUUID } = require('node:crypto');
+const { generate } = require('otplib');
 const { createServer } = require('../server/app.js');
 const { createStore, ApiError } = require('../server/supabase.js');
 const { configuration } = require('./test-hosted-writes.js');
@@ -27,15 +28,40 @@ async function main() {
   const store = createStore({ url: fixtures.projectUrl, key });
   const created = [];
   const sessionTokens = new Set();
+  const externalOrigins=new Set();
+  const securityEvents=[];
   const sessionsByEmail = new Map();
   let activeUser;
+  let ownFactor, ownFactorSecret, factorCleanupToken;
+  async function factorRequest(endpoint,token,method='GET',body){
+    return fetch(fixtures.projectUrl+'/auth/v1/'+endpoint,{method,redirect:'error',signal:AbortSignal.timeout(15000),
+      headers:{apikey:key,Authorization:`Bearer ${token}`,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
+  }
+  async function factorCode(){
+    const response=await factorRequest('settings',factorCleanupToken);
+    assert.equal(response.status,200);
+    return generate({secret:ownFactorSecret,epoch:Math.floor(Date.parse(response.headers.get('date'))/1000)});
+  }
   let writes = 0, loseResponse = true;
   const wrappedStore = { ...store,
     signIn: async (...args) => {
       const session = await store.signIn(...args);
       sessionTokens.add(session.access_token); sessionsByEmail.set(session.user.email, session.access_token); return session;
     },
-    signOut: async token => { const result = await store.signOut(token); sessionTokens.delete(token); return result; },
+    signOut: async token => {
+      const result=await store.signOut(token);
+      const id=JSON.parse(Buffer.from(token.split('.')[1],'base64url').toString()).session_id;
+      for(const issued of sessionTokens)if(JSON.parse(Buffer.from(issued.split('.')[1],'base64url').toString()).session_id===id)sessionTokens.delete(issued);
+      return result;
+    },
+    refreshSession: async token => {
+      const session=await store.refreshSession(token); sessionTokens.delete(token);sessionTokens.add(session.access_token);
+      sessionsByEmail.set(session.user.email,session.access_token);return session;
+    },
+    verifyMfa: async (token,...args)=>{
+      const session=await store.verifyMfa(token,...args);sessionTokens.delete(token);sessionTokens.add(session.access_token);
+      sessionsByEmail.set(session.user.email,session.access_token);factorCleanupToken=session.access_token;return session;
+    },
     createEncounter: async (token, body) => {
       if (![fixtures.unitA, fixtures.unitB].includes(body.unit_id)) throw new Error('Fixture units only');
       const rows = await store.createEncounter(token, body);
@@ -49,7 +75,8 @@ async function main() {
       return row;
     }
   };
-  const server = createServer(wrappedStore, { staticRoot: path.resolve(__dirname, '..'), enableRemoteUI: true });
+  const server = createServer(wrappedStore, { staticRoot: path.resolve(__dirname, '..'), enableRemoteUI: true,
+    onSecurityEvent:event=>securityEvents.push(event) });
   const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'osler-ui-test-'));
   let chrome, socket;
   const pending = new Map();
@@ -141,6 +168,7 @@ async function main() {
     server.listen(0, '127.0.0.1'); await once(server, 'listening');
     const chromePath = process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
     chrome = spawn(chromePath, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
+      '--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream',
       '--disable-background-networking', '--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1',
       `--user-data-dir=${profile}`, 'about:blank'], { stdio: 'ignore', windowsHide: true });
     let spawnFailed = false; chrome.on('error', () => { spawnFailed = true; });
@@ -153,6 +181,10 @@ async function main() {
     await once(socket, 'open');
     socket.addEventListener('message', event => {
       const message = JSON.parse(event.data);
+      if(message.method==='Network.requestWillBeSent') {
+        const url=message.params.request.url;
+        if(/^https?:/.test(url) && new URL(url).hostname!=='127.0.0.1')externalOrigins.add(new URL(url).origin);
+      }
       if (message.id && pending.has(message.id)) {
         const call = pending.get(message.id); clearTimeout(call.timeout); pending.delete(message.id);
         if (message.error) call.reject(new Error('CDP operation failed')); else call.resolve(message.result);
@@ -163,17 +195,58 @@ async function main() {
     const attached = await send('Target.attachToTarget', { targetId: target.targetId, flatten: true }, null);
     targetSession = attached.sessionId;
     await send('Page.enable'); await send('Runtime.enable'); await send('Network.enable');
-    // Vendor OCR/icons/styles are outside this focused API smoke check.
-    await send('Network.setBlockedURLs', { urls: ['*cdn.tailwindcss.com*', '*unpkg.com*', '*cdn.jsdelivr.net*'] });
     await send('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/` });
     await waitFor(`!!document.getElementById('remote-content') && !document.getElementById('remote-content').hidden && document.getElementById('persistence-status').textContent.includes('navegador')`);
     await evaluate(`document.getElementById('remote-panel').open=true`);
+    stage='local backup validation and export minimization';
+    await send('Browser.setDownloadBehavior',{behavior:'deny'},null);
+    const invalidImport=await evaluate(`(async()=>{const before=JSON.stringify([...drafts]);await importBackup(new File([JSON.stringify({app:'ICU-Mind',version:1,beds:[{bed:'10',data:{fields:null}}]})],'synthetic-invalid.json',{type:'application/json'}));return JSON.stringify([...drafts])===before;})()`);
+    assert.equal(invalidImport,true);
+    await evaluate(`(async()=>{await importBackup(new File([JSON.stringify({app:'ICU-Mind',version:1,beds:[{bed:'10',data:{fields:{},notes:{vm:'Backup sintético local'},ocr:{},devices:[],audioUrl:'javascript:alert(1)'}}]})],'synthetic-valid.json',{type:'application/json'}));})()`);
+    assert.equal(await evaluate(`drafts.get('10').audioUrl`),null);
+    const exportSafe=await evaluate(`(async()=>{let blob;const original=URL.createObjectURL;URL.createObjectURL=function(value){if(value.type==='application/json')blob=value;return original.call(this,value);};try{exportBackup();const text=await blob.text();return !text.includes('javascript:') && !text.includes('access_token') && !text.includes('refresh_token') && !text.includes('remote-password');}finally{URL.createObjectURL=original;}})()`);
+    assert.equal(exportSafe,true);assert.equal(writes,0);
+    console.log('PASS: malformed import changes no draft, imported blob/script URLs are discarded, and explicit export contains no Auth material.');
+    stage='same-origin styles, OCR and synthetic audio';
+    assert.equal(await evaluate(`getComputedStyle(document.body).backgroundColor`),'rgb(8, 9, 12)');
+    assert.equal(await evaluate(`document.querySelectorAll('[onclick],[oninput],[onchange],script[src^="http"]').length`),0);
+    await evaluate(`new Promise(resolve=>{const canvas=document.createElement('canvas');canvas.width=1000;canvas.height=250;const context=canvas.getContext('2d');context.fillStyle='white';context.fillRect(0,0,1000,250);context.fillStyle='black';context.font='64px Arial';context.fillText('pH: 7.40',60,140);canvas.toBlob(blob=>{const transfer=new DataTransfer();transfer.items.add(new File([blob],'synthetic-ocr.png',{type:'image/png'}));const input=document.getElementById('file-upload');input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));resolve();},'image/png');})`);
+    await waitFor(`document.getElementById('upload-status').textContent.startsWith('OCR preliminar')`);
+    assert.ok(await evaluate(`document.getElementById('ocr-text').value.includes('7.40')`));
+    assert.equal(writes,0);
+    await click('btn-round');await waitFor(`document.getElementById('rec-status').textContent.includes('Gravando')`);
+    await new Promise(resolve=>setTimeout(resolve,400));await click('btn-round');
+    await waitFor(`document.getElementById('rec-status').textContent.includes('concluída')`);
+    assert.ok(await evaluate(`document.getElementById('round-audio').src.startsWith('blob:')`));
+    // Discard only the temporary in-memory fake-device audio before comparing drafts.
+    await evaluate(`draft().audioUrl && URL.revokeObjectURL(draft().audioUrl);draft().audioUrl=null;delete draft().audioType;renderAudio();clearPreview();document.getElementById('ocr-text').value='';draft().ocr.vm='';`);
+    console.log('PASS: self-hosted CSS/icons/OCR worker/model under CSP, synthetic image recognition and fake-device local audio.');
     await change('manual-text-input', 'Rascunho sintético local que não deve ser enviado.');
     // Wait for the existing asynchronous score calculation and draft write too.
     await until(async () => JSON.parse(await localDrafts()).some(row => row.data?.scoreText?.includes('Rascunho sintético local')));
     const draftsBefore = await localDrafts();
     stage = 'browser login and explicit selection';
     await login(users[1]);
+    stage='browser temporary MFA setup and step-up';
+    const enroll=await factorRequest('factors',sessionsByEmail.get(users[1].email),'POST',{
+      factor_type:'totp',friendly_name:'osler-browser-disposable-'+randomUUID()
+    });
+    assert.equal(enroll.status,200);
+    const factorData=await enroll.json();ownFactor=factorData.id;ownFactorSecret=factorData.totp.secret;
+    const initialCode=await generate({secret:ownFactorSecret,epoch:Math.floor(Date.parse(enroll.headers.get('date'))/1000)});
+    const initialStepUp=await store.verifyMfa(sessionsByEmail.get(users[1].email),ownFactor,initialCode);
+    factorCleanupToken=initialStepUp.access_token;sessionTokens.add(factorCleanupToken);
+    await logout();await login(users[1]);
+    assert.equal(await evaluate(`document.getElementById('remote-mfa').hidden`),false);
+    await change('remote-mfa-code',await factorCode());await click('remote-mfa-button');
+    await waitFor(`document.getElementById('remote-status').textContent.includes('MFA confirmado')`);
+    assert.equal(await evaluate(`document.getElementById('remote-mfa-code').value`),'');
+    assert.equal(JSON.parse(Buffer.from(sessionsByEmail.get(users[1].email).split('.')[1],'base64url').toString()).aal,'aal2');
+    const remove=await factorRequest('factors/'+ownFactor,factorCleanupToken,'DELETE');assert.equal(remove.status,200);
+    assert.ok(!JSON.stringify(securityEvents).includes(ownFactorSecret));ownFactor=null;ownFactorSecret=undefined;
+    console.log('PASS: real UI MFA step-up reaches AAL2 without logging codes; only the execution-owned temporary factor is removed.');
+    stage='browser renewed login session';
+    await click('remote-renew');await waitFor(`document.getElementById('remote-status').textContent.includes('Sessão renovada')`);
     assert.equal(await evaluate(`document.getElementById('remote-unit').value`), '');
     assert.equal(await evaluate(`document.getElementById('remote-encounter').value`), '');
     await change('remote-unit', fixtures.unitA);
@@ -206,6 +279,12 @@ async function main() {
     checkDrafts(await localDrafts(), draftsBefore);
     stage = 'browser no persisted session assertion';
     assert.equal(await evaluate(`localStorage.length + sessionStorage.length`), 0);
+    assert.equal(externalOrigins.size,0);
+    const serializedLogs=JSON.stringify(securityEvents);
+    for(const user of users) assert.ok(!serializedLogs.includes(user.password));
+    for(const sessionToken of sessionTokens) assert.ok(!serializedLogs.includes(sessionToken));
+    assert.ok(!serializedLogs.includes('Rascunho sintético local'));
+    console.log('PASS: no external HTTP origins, no credentials/clinical values in audit logs, and refresh stays server-side.');
     stage = 'browser second reviewed observation';
     await saveReviewed('7,35');
     assert.equal(writes, 3); // Lost first response, retry, then a second distinct observation.
@@ -300,6 +379,7 @@ async function main() {
   } finally {
     // Only close episodes generated by this invocation; retain immutable events.
     const cleanup = await Promise.allSettled(created.map(row => store.closeEncounter(row.token, row.id)));
+    if(ownFactor){const removal=await factorRequest('factors/'+ownFactor,factorCleanupToken,'DELETE');assert.equal(removal.status,200);ownFactor=null;ownFactorSecret=undefined;}
     const logout = await Promise.allSettled([...sessionTokens].map(token => store.signOut(token)));
     socket?.close();
     for (const call of pending.values()) clearTimeout(call.timeout);
@@ -308,7 +388,10 @@ async function main() {
     const resolved = path.resolve(profile);
     if (!resolved.startsWith(path.resolve(os.tmpdir()) + path.sep + 'osler-ui-test-')) throw new Error('Unexpected browser profile path');
     await fs.rm(resolved, { recursive: true, force: true, maxRetries: 20, retryDelay: 200 });
-    if ([...cleanup, ...logout].some(row => row.status === 'rejected')) throw new Error('Synthetic episode or session cleanup failed');
+    if ([...cleanup, ...logout].some(row => row.status === 'rejected')) {
+      console.error('Cleanup failures (HTTP status only): '+[...cleanup,...logout].filter(row=>row.status==='rejected').map(row=>row.reason.status || 'local').join(','));
+      throw new Error('Synthetic episode or session cleanup failed');
+    }
   }
   console.log('Browser persistence and isolation suite passed; new synthetic records retained, generated episodes closed and sessions/profile cleaned up.');
 }

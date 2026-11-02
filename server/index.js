@@ -7,5 +7,6 @@ if (enableRemoteUI && (process.env.SUPABASE_URL !== 'https://otnwkxchugsovtjdany
     !process.env.SUPABASE_PUBLISHABLE_KEY?.startsWith('sb_publishable_'))) throw new Error('Remote UI requires the authorized development project and publishable key');
 const port = Number(process.env.PORT || 3000);
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid PORT');
-createServer(store, { staticRoot: require('node:path').resolve(__dirname, '..'), enableRemoteUI })
+createServer(store, { staticRoot: require('node:path').resolve(__dirname, '..'), enableRemoteUI,
+  onSecurityEvent: event => console.log(JSON.stringify(event)) })
   .listen(port, '127.0.0.1', () => console.log(`Osler development server listening on port ${port}`));

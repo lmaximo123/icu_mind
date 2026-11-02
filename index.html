@@ -4,46 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Osler | Inteligência contemplativa para UTI</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js" defer></script>
+  <script src="/vendor/lucide.min.js" defer></script>
+  <script src="/vendor/tesseract.min.js" defer></script>
   <script src="/osler-validation.js" defer></script>
   <script src="/clinical-scores.js" defer></script>
   <script src="/score-ui.js" defer></script>
   <script src="/app.js" defer></script>
+  <script src="/ui-bindings.js" defer></script>
   <script src="/backend-client.js" defer></script>
   <script src="/remote-session.js" defer></script>
   <script src="/remote-ui.js" defer></script>
-  <style>
-    body { background-color: #08090c; transition: background-color .3s ease; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; }
-    [hidden] { display: none !important; }
-    button, [role="button"] { touch-action: manipulation; }
-    button:focus-visible, [role="button"]:focus-visible { outline: 2px solid #818cf8; outline-offset: 3px; }
-    button:disabled { opacity: .5; cursor: not-allowed; }
-    textarea, input { max-width: 100%; }
-    .glass-card { background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255, 255, 255, 0.1); }
-
-    /* OSLER — identidade visual global: preto, grafite e vermelho */
-    body { background: #08090c !important; color: #e5e7eb; }
-    .glass-card { background: #08090c !important; border: 1px solid rgba(150,28,36,.28); box-shadow: 0 10px 30px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.025); }
-    input:not([type="checkbox"]):not([type="file"]), textarea, select { background-color: #101014 !important; color: #e5e7eb !important; border-color: #393035 !important; }
-    input:focus, textarea:focus, select:focus { outline: none; border-color: #a51d27 !important; box-shadow: 0 0 0 2px rgba(165,29,39,.18); }
-    button, [role="button"], label.cursor-pointer { transition: background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease; }
-    button:not(:disabled):hover, [role="button"]:hover { border-color: rgba(210,35,47,.65); }
-    button:focus-visible, [role="button"]:focus-visible { outline: 2px solid #dc2632; outline-offset: 3px; }
-    .bg-slate-900, .bg-slate-900\\/80, .bg-slate-900\\/60, .bg-slate-900\\/50, .bg-slate-900\\/30, .bg-slate-800, .bg-slate-800\\/70 { background-color: #08090c !important; }
-    .border-slate-800, .border-slate-700 { border-color: #30252a !important; }
-    .bg-red-700 { background-color: #8f111b !important; }
-    .hover\\:bg-red-600:hover { background-color: #b51d29 !important; }
-    .text-red-300, .text-red-400 { color: #f05a64 !important; }
-    .border-red-700 { border-color: #76202a !important; }
-    .tab-btn[aria-selected="true"], .bed-btn[aria-pressed="true"] { background: #94131e !important; color: #fff !important; box-shadow: 0 0 0 1px rgba(238,55,66,.35), 0 0 16px rgba(150,15,28,.18); }
-    #upload-zone { background: rgba(18,12,15,.55) !important; border-color: #54232a !important; }
-    #upload-zone:hover { border-color: #c32633 !important; background: rgba(55,12,18,.25) !important; }
-    a { color: #f06a72; }
-    ::selection { background: rgba(190,25,38,.45); color: #fff; }
-
-  </style>
+  <link rel="stylesheet" href="/vendor/app.css">
 </head>
 <body id="main-body" class="p-4 md:p-6 min-h-screen">
 
@@ -61,23 +32,23 @@
 
     <div class="flex flex-wrap items-center gap-2 text-xs" aria-label="Triagem manual">
       <span id="severity-badge" role="status" class="text-slate-300">Sem triagem</span>
-      <button data-severity="stable" onclick="setSeverity('stable')" class="px-2 py-1 rounded-lg bg-emerald-600/30 text-emerald-300">Estável</button>
-      <button data-severity="warning" onclick="setSeverity('warning')" class="px-2 py-1 rounded-lg bg-amber-600/30 text-amber-300">Atenção</button>
-      <button data-severity="critical" onclick="setSeverity('critical')" class="px-2 py-1 rounded-lg bg-red-600/30 text-red-300">Crítico</button>
+      <button data-severity="stable" data-osler-bind="b0" class="px-2 py-1 rounded-lg bg-emerald-600/30 text-emerald-300">Estável</button>
+      <button data-severity="warning" data-osler-bind="b1" class="px-2 py-1 rounded-lg bg-amber-600/30 text-amber-300">Atenção</button>
+      <button data-severity="critical" data-osler-bind="b2" class="px-2 py-1 rounded-lg bg-red-600/30 text-red-300">Crítico</button>
     </div>
     <!-- SELETOR DE 10 LEITOS -->
     <div class="flex items-center gap-2 overflow-x-auto max-w-full pb-2 md:pb-0">
       <span class="text-xs text-slate-400 font-semibold uppercase mr-2">Leitos:</span>
-<button type="button" data-bed="01" onclick="selectBed('01', this)" aria-pressed="true" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-red-700 text-white font-bold">L01</button>
-<button type="button" data-bed="02" onclick="selectBed('02', this)" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L02</button>
-<button type="button" data-bed="03" onclick="selectBed('03', this)" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L03</button>
-<button type="button" data-bed="04" onclick="selectBed('04', this)" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L04</button>
-<button type="button" data-bed="05" onclick="selectBed('05', this)" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L05</button>
-<button type="button" data-bed="06" onclick="selectBed('06', this)" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L06</button>
-<button type="button" data-bed="07" onclick="selectBed('07', this)" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L07</button>
-<button type="button" data-bed="08" onclick="selectBed('08', this)" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L08</button>
-<button type="button" data-bed="09" onclick="selectBed('09', this)" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L09</button>
-<button type="button" data-bed="10" onclick="selectBed('10', this)" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L10</button>
+<button type="button" data-bed="01" data-osler-bind="b3" aria-pressed="true" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-red-700 text-white font-bold">L01</button>
+<button type="button" data-bed="02" data-osler-bind="b4" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L02</button>
+<button type="button" data-bed="03" data-osler-bind="b5" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L03</button>
+<button type="button" data-bed="04" data-osler-bind="b6" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L04</button>
+<button type="button" data-bed="05" data-osler-bind="b7" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L05</button>
+<button type="button" data-bed="06" data-osler-bind="b8" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L06</button>
+<button type="button" data-bed="07" data-osler-bind="b9" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L07</button>
+<button type="button" data-bed="08" data-osler-bind="b10" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L08</button>
+<button type="button" data-bed="09" data-osler-bind="b11" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L09</button>
+<button type="button" data-bed="10" data-osler-bind="b12" aria-pressed="false" class="bed-btn px-3 py-1.5 rounded-lg text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700">L10</button>
 
     </div>
   </header>
@@ -95,7 +66,13 @@
       <div id="remote-account" hidden class="flex flex-wrap items-center gap-3 mt-3">
         <span id="remote-user" class="text-xs"></span>
         <button id="remote-logout" type="button" class="bg-slate-800 rounded-lg p-2">Sair</button>
+        <button id="remote-renew" type="button" class="bg-slate-800 rounded-lg p-2">Renovar sessão</button>
       </div>
+      <form id="remote-mfa" hidden class="flex flex-wrap items-end gap-3 mt-3">
+        <label class="text-xs">Autenticador cadastrado<select id="remote-factor" class="block rounded-lg p-2 border"></select></label>
+        <label class="text-xs">Código MFA<input id="remote-mfa-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autocomplete="one-time-code" class="block rounded-lg p-2 border"></label>
+        <button id="remote-mfa-button" type="submit" class="bg-slate-800 rounded-lg p-2">Confirmar MFA</button>
+      </form>
       <p id="remote-status" role="status" aria-live="polite" class="text-sm mt-3">Entre para acessar as unidades permitidas.</p>
       <p id="remote-pending" class="text-xs text-amber-200 mt-2" hidden></p>
       <button id="remote-discard" type="button" hidden class="rounded-lg p-2 bg-slate-800 text-xs mt-2">Descartar tentativa desta tela</button>
@@ -139,8 +116,8 @@
         <div><strong id="active-bed" class="text-red-300">Leito 01</strong> · Salvamento automático local ativo. Os registros ficam neste navegador/dispositivo; não há sincronização entre aparelhos nesta versão.</div>
         <div class="flex flex-wrap items-center gap-3">
           <span id="persistence-status" role="status" class="text-emerald-300">Preparando armazenamento seguro…</span>
-          <button type="button" onclick="exportBackup()" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200">Exportar backup</button>
-          <label class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 cursor-pointer">Importar backup<input id="backup-file" type="file" accept="application/json,.json" class="hidden" onchange="importBackup(this.files[0]); this.value=''"></label>
+          <button type="button" data-osler-bind="b13" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200">Exportar backup</button>
+          <label class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 cursor-pointer">Importar backup<input id="backup-file" type="file" accept="application/json,.json" class="hidden" data-osler-bind="b14"></label>
         </div>
         <p class="text-amber-200">Use apenas dados fictícios ou desidentificados enquanto não houver autenticação, sincronização em nuvem e validação institucional de privacidade.</p>
       </div>
@@ -158,11 +135,11 @@
         </div>
 
         <div class="flex gap-3">
-          <button id="btn-round" onclick="toggleRoundRecording()" class="flex-1 py-3 px-4 bg-red-700 hover:bg-red-600 text-white rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition">
+          <button id="btn-round" data-osler-bind="b15" class="flex-1 py-3 px-4 bg-red-700 hover:bg-red-600 text-white rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition">
             <i data-lucide="disc" class="w-4 h-4"></i>
             <span>Iniciar Gravação do Round</span>
           </button>
-          <button onclick="generateHandover()" class="py-3 px-4 bg-red-700 hover:bg-red-600 text-white rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition">
+          <button data-osler-bind="b16" class="py-3 px-4 bg-red-700 hover:bg-red-600 text-white rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition">
             <i data-lucide="file-text" class="w-4 h-4"></i>
             <span>Gerar Passagem de Plantão</span>
           </button>
@@ -179,11 +156,11 @@
         <h2 class="text-sm font-bold mb-4">Entrada de Dados Multimodal · Foto/OCR + Redação Manual</h2>
         <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-3 overflow-x-auto">
           <div class="flex gap-2" role="tablist" aria-label="Categorias clínicas">
-            <button type="button" id="tab-vm" role="tab" data-tab="vm" aria-controls="category-panel" aria-selected="true" tabindex="0" onclick="switchTab('vm')" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-700 text-white">Ventilação / Gaso</button>
-            <button type="button" id="tab-vitals" role="tab" data-tab="vitals" aria-controls="category-panel" aria-selected="false" tabindex="-1" onclick="switchTab('vitals')" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-400">Sinais Vitais</button>
-            <button type="button" id="tab-fluid" role="tab" data-tab="fluid" aria-controls="category-panel" aria-selected="false" tabindex="-1" onclick="switchTab('fluid')" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-400">Balanço Hídrico</button>
-            <button type="button" id="tab-infusions" role="tab" data-tab="infusions" aria-controls="category-panel" aria-selected="false" tabindex="-1" onclick="switchTab('infusions')" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-400">Infusões / DVA</button>
-            <button type="button" id="tab-invasive" role="tab" data-tab="invasive" aria-controls="category-panel" aria-selected="false" tabindex="-1" onclick="switchTab('invasive')" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-400">Invasões & Suporte</button>
+            <button type="button" id="tab-vm" role="tab" data-tab="vm" aria-controls="category-panel" aria-selected="true" tabindex="0" data-osler-bind="b17" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-700 text-white">Ventilação / Gaso</button>
+            <button type="button" id="tab-vitals" role="tab" data-tab="vitals" aria-controls="category-panel" aria-selected="false" tabindex="-1" data-osler-bind="b18" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-400">Sinais Vitais</button>
+            <button type="button" id="tab-fluid" role="tab" data-tab="fluid" aria-controls="category-panel" aria-selected="false" tabindex="-1" data-osler-bind="b19" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-400">Balanço Hídrico</button>
+            <button type="button" id="tab-infusions" role="tab" data-tab="infusions" aria-controls="category-panel" aria-selected="false" tabindex="-1" data-osler-bind="b20" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-400">Infusões / DVA</button>
+            <button type="button" id="tab-invasive" role="tab" data-tab="invasive" aria-controls="category-panel" aria-selected="false" tabindex="-1" data-osler-bind="b21" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-400">Invasões & Suporte</button>
           </div>
         </div>
 
@@ -208,17 +185,17 @@
 
         </div>
 
-        <input type="file" accept="image/jpeg,image/png,image/webp" class="hidden" id="file-upload" onchange="previewReport(this.files[0])">
+        <input type="file" accept="image/jpeg,image/png,image/webp" class="hidden" id="file-upload" data-osler-bind="b22">
         <p id="upload-status" role="status" class="mt-3 text-xs text-slate-400"></p>
         <img id="report-preview" hidden alt="Pré-visualização do relatório selecionado" class="mt-3 max-h-80 rounded-xl object-contain mx-auto">
 
         <div class="mt-3 flex flex-wrap gap-2 items-center">
-          <button id="ocr-button" disabled onclick="processarFotoOCR()" class="px-3 py-2 rounded-lg bg-red-700 hover:bg-red-600 text-xs">Extrair texto da imagem</button>
+          <button id="ocr-button" disabled data-osler-bind="b23" class="px-3 py-2 rounded-lg bg-red-700 hover:bg-red-600 text-xs">Extrair texto da imagem</button>
           <span class="text-xs text-slate-500">O OCR pode errar números, unidades e nomes.</span>
         </div>
         <label for="ocr-text" class="block text-xs text-slate-400 mt-4 mb-2">Texto extraído · revise antes de usar</label>
         <textarea id="ocr-text" rows="4" class="w-full bg-slate-900/80 text-xs p-3 rounded-xl border border-slate-700" placeholder="OCR preliminar: confira e aplique às notas antes de usar em cálculos."></textarea>
-        <button id="apply-ocr" onclick="applyOCR()" class="mt-2 px-3 py-2 text-xs rounded-lg bg-slate-800 hover:bg-slate-700">Adicionar texto revisado às notas</button>
+        <button id="apply-ocr" data-osler-bind="b24" class="mt-2 px-3 py-2 text-xs rounded-lg bg-slate-800 hover:bg-slate-700">Adicionar texto revisado às notas</button>
         <label for="manual-text-input" class="block text-xs text-slate-400 mt-4 mb-2">Redação manual / Notas da categoria</label>
         <textarea id="manual-text-input" rows="4" class="w-full bg-slate-900/80 text-xs p-3 rounded-xl border border-slate-700" placeholder="Ex.: idade: 70; sexo: masculino; peso: 70 kg; creatinina: 1,2 mg/dL"></textarea>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4 text-xs">
@@ -228,13 +205,13 @@
         <label for="plan-input" class="block mt-4 text-xs">Plano informado pela equipe</label>
         <textarea id="plan-input" rows="2" class="mt-2 w-full bg-slate-900/80 text-xs p-3 rounded-xl border border-slate-700" placeholder="Registre o plano definido pela equipe assistente."></textarea>
         <div class="mt-4 p-3 bg-slate-900/60 rounded-xl border border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-          <label>Peso extraído (kg)<input id="input-weight" readonly aria-label="Peso extraído" type="number" min="1" max="500" step="0.1" oninput="recalcularFarmaco()" class="mt-2 w-full bg-slate-800 p-2 rounded-lg" placeholder="—"></label>
-          <label>ClCr calculado (mL/min)<input id="input-crcl" readonly aria-label="ClCr calculado" type="number" min="0" step="0.1" oninput="recalcularFarmaco();recalcularAnticoagulation()" class="mt-2 w-full bg-slate-800 p-2 rounded-lg" placeholder="—"></label>
-          <label>HAS-BLED<input id="input-hasbled" readonly aria-label="HAS-BLED calculado" type="number" min="0" max="9" step="1" oninput="recalcularAnticoagulation()" class="mt-2 w-full bg-slate-800 p-2 rounded-lg" placeholder="—"></label>
-          <label>CHA₂DS₂-VASc<input id="input-chads" readonly aria-label="CHA₂DS₂-VASc calculado" type="number" min="0" max="9" step="1" oninput="recalcularAnticoagulation()" class="mt-2 w-full bg-slate-800 p-2 rounded-lg" placeholder="—"></label>
+          <label>Peso extraído (kg)<input id="input-weight" readonly aria-label="Peso extraído" type="number" min="1" max="500" step="0.1" data-osler-bind="b25" class="mt-2 w-full bg-slate-800 p-2 rounded-lg" placeholder="—"></label>
+          <label>ClCr calculado (mL/min)<input id="input-crcl" readonly aria-label="ClCr calculado" type="number" min="0" step="0.1" data-osler-bind="b26" class="mt-2 w-full bg-slate-800 p-2 rounded-lg" placeholder="—"></label>
+          <label>HAS-BLED<input id="input-hasbled" readonly aria-label="HAS-BLED calculado" type="number" min="0" max="9" step="1" data-osler-bind="b27" class="mt-2 w-full bg-slate-800 p-2 rounded-lg" placeholder="—"></label>
+          <label>CHA₂DS₂-VASc<input id="input-chads" readonly aria-label="CHA₂DS₂-VASc calculado" type="number" min="0" max="9" step="1" data-osler-bind="b28" class="mt-2 w-full bg-slate-800 p-2 rounded-lg" placeholder="—"></label>
         </div>
         <p id="input-status" role="status" class="text-xs text-amber-300 mt-2"></p>
-        <button onclick="processarDadosCompletos()" class="mt-4 px-4 py-2 rounded-xl bg-red-700 hover:bg-red-600 text-xs font-medium">Processar dados e atualizar passagem</button>
+        <button data-osler-bind="b29" class="mt-4 px-4 py-2 rounded-xl bg-red-700 hover:bg-red-600 text-xs font-medium">Processar dados e atualizar passagem</button>
 
         <!-- MÓDULO ESPECIAL: INVASÕES E SUPORTE AVANÇADO (SUGESTÕES) -->
         <div id="invasive-suggestions" hidden class="mt-4 p-4 bg-slate-900/60 rounded-xl border border-slate-800">
@@ -323,7 +300,7 @@
             <i data-lucide="clipboard-list" class="w-5 h-5 text-red-400"></i>
             Passagem de Plantão Estruturada (SBAR)
           </h3>
-          <button type="button" onclick="copyHandover()" class="text-xs text-red-400 hover:underline flex items-center gap-1">
+          <button type="button" data-osler-bind="b30" class="text-xs text-red-400 hover:underline flex items-center gap-1">
             <i data-lucide="copy" class="w-3.5 h-3.5"></i> Copiar Texto
           </button>
         </div>
@@ -342,8 +319,8 @@
         <h3 id="pred-title" class="font-bold text-sm mt-2">Sem triagem informada</h3>
         <p id="pred-desc" class="text-xs text-slate-400 mt-2">Selecione a classificação definida pela equipe. A gravidade não é inferida pelo número do leito.</p>
         <div class="mt-4 flex gap-2">
-          <button onclick="feedback(this, 'Concordo')" class="flex-1 p-2 text-xs rounded-lg bg-emerald-600/30 text-emerald-300">Concordo</button>
-          <button onclick="feedback(this, 'Reavaliar')" class="flex-1 p-2 text-xs rounded-lg bg-slate-800 text-slate-300">Reavaliar</button>
+          <button data-osler-bind="b31" class="flex-1 p-2 text-xs rounded-lg bg-emerald-600/30 text-emerald-300">Concordo</button>
+          <button data-osler-bind="b32" class="flex-1 p-2 text-xs rounded-lg bg-slate-800 text-slate-300">Reavaliar</button>
         </div>
         <p id="feedback-status" role="status" class="text-xs text-slate-400 mt-3"></p>
       </section>

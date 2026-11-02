@@ -21,6 +21,8 @@ insert into auth.users(id) values
 insert into public.units(id,label) values
  ('20000000-0000-0000-0000-000000000001','Synthetic A'),
  ('20000000-0000-0000-0000-000000000002','Synthetic B');
+update osler_private.unit_security set requires_mfa=false where unit_id in
+ ('20000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000002');
 insert into public.unit_members values
  ('20000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','clinician'),
  ('20000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002','clinician'),
