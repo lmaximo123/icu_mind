@@ -1,0 +1,43 @@
+name: Osler deterministic checks
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: npm audit --audit-level=high
+      - run: node scripts/check-secrets.js
+      - run: node scripts/check-clinical-readiness.js --validate-only
+      - run: node --test tests/*.test.js
+      - run: node scripts/test-restore.js
+      - run: node --check app.js
+      - run: node --check score-ui.js
+      - run: node --check clinical-scores.js
+      - run: node --check osler-validation.js
+      - run: node --check backend-client.js
+      - run: node --check remote-session.js
+      - run: node --check remote-ui.js
+      - run: node --check remote-engine-ui.js
+      - run: node --check engine-review.js
+      - run: node --check clinical-instruments.js
+      - run: node --check document-review.js
+      - run: node --check document-ui.js
+      - run: node --check local-ocr.js
+      - run: node --check synthetic-images.js
+      - run: for f in server/*.js; do node --check "$f" || exit; done
+  database:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/test-db.sh

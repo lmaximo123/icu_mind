@@ -1,7 +1,9 @@
 # Osler — implantação segura e critérios de aceite
 
 ## Estado atual (não validado para uso assistencial)
-Frontend estático, IndexedDB por navegador, OCR local Tesseract, cálculos determinísticos e revisão manual. Não existe servidor autenticado, banco central, agente multimodal ou monitoramento contínuo. Não carregar dados identificáveis de pacientes nesta versão.
+Frontend estático, IndexedDB por navegador, OCR local Tesseract, cálculos determinísticos e revisão manual. Há API autenticada e painel optativo de persistência remota somente no Supabase de desenvolvimento autorizado, com dados sintéticos; isso não constitui implantação clínica. Não há agente multimodal nem monitoramento contínuo. Não carregar dados identificáveis de pacientes nesta versão.
+
+O responsável relatou gravação de duas observações sintéticas, recarga da página, novo login e permanência dos registros no mesmo episódio remoto. A evidência e suas limitações estão em [supabase/README.md](supabase/README.md#manual-persistence-evidence-reported-by-the-owner). A proposta de conexão aos escores está em [docs/remote-score-proposal.md](docs/remote-score-proposal.md) e ainda não foi implementada.
 
 ## Arquitetura alvo
 1. Autenticação institucional (SSO/OIDC + MFA), RBAC por unidade e profissional; sessões curtas.
@@ -23,7 +25,7 @@ Frontend estático, IndexedDB por navegador, OCR local Tesseract, cálculos dete
 - Procedimentos de resposta a incidentes, governança de modelo e análise regulatória/ética.
 
 ## Testes disponíveis
-Execute `node --test tests/osler-validation.test.js` em ambiente Node.js >=18. Esses testes cobrem apenas o módulo de validação conservadora e não demonstram segurança ou eficácia clínica do produto.
+Execute `npm ci --ignore-scripts`, `npm run build` e `node --test tests/*.test.js` com Node.js >=22. Há também testes de navegador e Auth sintéticos e restauração em PostgreSQL isolado. Evidências, controles ativos versus preparados e bloqueios estão em [docs/security-foundation.md](docs/security-foundation.md). A migração de MFA/auditoria/correções foi aplicada como `20261102142059` após inspeção do histórico/schema e validada no desenvolvimento com contas sintéticas AAL1/AAL2 e papéis leitor/clínico/admin. Nenhum desses resultados demonstra aptidão para dados reais, conformidade LGPD ou eficácia clínica.
 
 ## Limitações matemáticas
 Repetição da mesma fórmula não produz verificações independentes. Erros correlacionados, viés de extração, mudança de população e dados de origem errados persistem mesmo quando múltiplos algoritmos concordam. Não é possível demonstrar erro clínico nulo; mensurar desempenho, intervalos de confiança, calibração e taxa de abstenção em dados independentes.

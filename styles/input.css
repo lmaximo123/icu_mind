@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+    body { background-color: #08090c; transition: background-color .3s ease; color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; }
+    [hidden] { display: none !important; }
+    button, [role="button"] { touch-action: manipulation; }
+    button:focus-visible, [role="button"]:focus-visible { outline: 2px solid #818cf8; outline-offset: 3px; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    textarea, input { max-width: 100%; }
+    .glass-card { background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255, 255, 255, 0.1); }
+
+    /* OSLER — identidade visual global: preto, grafite e vermelho */
+    body { background: #08090c !important; color: #e5e7eb; }
+    .glass-card { background: #08090c !important; border: 1px solid rgba(150,28,36,.28); box-shadow: 0 10px 30px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.025); }
+    input:not([type="checkbox"]):not([type="file"]), textarea, select { background-color: #101014 !important; color: #e5e7eb !important; border-color: #393035 !important; }
+    input:focus, textarea:focus, select:focus { outline: none; border-color: #a51d27 !important; box-shadow: 0 0 0 2px rgba(165,29,39,.18); }
+    button, [role="button"], label.cursor-pointer { transition: background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease; }
+    button:not(:disabled):hover, [role="button"]:hover { border-color: rgba(210,35,47,.65); }
+    button:focus-visible, [role="button"]:focus-visible { outline: 2px solid #dc2632; outline-offset: 3px; }
+    .bg-slate-900, .bg-slate-900\/80, .bg-slate-900\/60, .bg-slate-900\/50, .bg-slate-900\/30, .bg-slate-800, .bg-slate-800\/70 { background-color: #08090c !important; }
+    .border-slate-800, .border-slate-700 { border-color: #30252a !important; }
+    .bg-red-700 { background-color: #8f111b !important; }
+    .hover\:bg-red-600:hover { background-color: #b51d29 !important; }
+    .text-red-300, .text-red-400 { color: #f05a64 !important; }
+    .border-red-700 { border-color: #76202a !important; }
+    .tab-btn[aria-selected="true"], .bed-btn[aria-pressed="true"] { background: #94131e !important; color: #fff !important; box-shadow: 0 0 0 1px rgba(238,55,66,.35), 0 0 16px rgba(150,15,28,.18); }
+    #upload-zone { background: rgba(18,12,15,.55) !important; border-color: #54232a !important; }
+    #upload-zone:hover { border-color: #c32633 !important; background: rgba(55,12,18,.25) !important; }
+    a { color: #f06a72; }
+    ::selection { background: rgba(190,25,38,.45); color: #fff; }
