@@ -182,3 +182,8 @@ somente após revisão completa. OCR bem-sucedido não é um teste clínico apro
   candidato. Isso foi registrado como limitação de extração, sem inventar o campo.
 - Falhas operacionais de OCR, rejeição de arquivo, indisponibilidade de leitura e
   perda de resposta foram exercitadas; testes reais não substituem validação clínica.
+- CI do commit `657710d564163014bef37485a3245dbbe6f25a9b` aprovado na
+  [execução 41549271954](https://github.com/lmaximo123/icu_mind/actions/runs/41549271954):
+  jobs `test` e `database`, incluindo PostgreSQL 17 nativo com oito migrações,
+  testes SQL de proveniência/MFA/RLS/rollback/retry, restart, build, audit e 76 testes.
+  CI não substitui a suíte Chrome hospedada, executada separadamente neste ambiente.
