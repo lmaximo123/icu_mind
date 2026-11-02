@@ -93,11 +93,11 @@ Storage, nem demonstra RPO/RTO de produção.
 | Cadastro fechado | Observado via Auth HTTPS antes dos testes; nenhuma chamada de signup adicionada |
 | Renovação | Ativa na API/UI de desenvolvimento; refresh token só no servidor, rotação/coalescência, teto técnico de 2h e descarte após logout/reinício |
 | MFA TOTP | Fluxo oficial e UI testados com código inválido e válido; AAL2 observado em token emitido pelo Auth; fatores temporários removidos |
-| Exigência MFA no banco | **Preparada, não confirmada no remoto**; novas unidades protegidas e papel admin exigem AAL2 e sessão ativa; duas fixtures legadas continuam AAL1 sintético |
-| Instituição | FK e escopo sintético preparados; não é identidade de paciente nem IAM institucional completo |
+| Exigência MFA no banco | **Aplicada e validada no desenvolvimento em 2026-11-02**; novas unidades e papel admin exigem AAL2 e sessão ativa; somente duas fixtures legadas continuam AAL1 sintético |
+| Instituição | FK e escopo sintético aplicados; não é identidade de paciente nem IAM institucional completo |
 | RLS/grants | Estado inicial hospedado observado; REST/RPC atuais e bloqueio do leitor testados; regras adicionais testadas no PostgreSQL isolado |
-| Correção append-only | RPC/API e tabela de vínculos preparados; original preservado, reason code, autor e retry; depende da migração pendente |
-| Auditoria de mutação | Triggers minimizados preparados em schema privado; cliente não pode escrever, admin AAL2 só consulta a própria unidade; depende da migração |
+| Correção append-only | RPC/API e vínculos aplicados e testados no remoto; original preservado, reason code, autor, retry e bloqueio após fechamento |
+| Auditoria de mutação | Triggers ativos em schema privado; cliente não escreve, somente admin AAL2 consulta sua unidade; guardas de alteração também testadas em registros novos |
 | Auditoria de acesso API | Ativa no servidor iniciado por `server/index.js`, JSON com request ID, horário, método, rota normalizada, status e ator autenticado; sem corpo/query/tokens |
 | Limites | Corpo de 16 KiB, timeouts, schemas, origem exata, allowlist de Host loopback contra DNS rebinding, páginas de até 100, offset máximo 100000, ordenação estável, rate limit por IP/token |
 | Navegador | CSP sem script inline, conexões apenas same-origin, headers de isolamento/referrer/frame; 33 handlers movidos para JS estático |
@@ -113,7 +113,7 @@ Storage, nem demonstra RPO/RTO de produção.
 `node scripts/test-restore.js` executou todas as migrações locais, os testes de RLS,
 MFA insuficiente/admin, revogação da sessão, correções e proteção da auditoria;
 criou um snapshot em memória e abriu outro PostgreSQL WASM a partir dele.
-Na última medição registrada: preparação 4430 ms, snapshot 146 ms, restauração e
+Na medição registrada na preparação inicial: preparação 4430 ms, snapshot 146 ms, restauração e
 verificação 705 ms, zero registros comprometidos antes da cópia perdidos.
 O RPO observado é **zero registros desse conjunto sintético sem gravações
 concorrentes durante o snapshot**; não é um RPO temporal de operação contínua.
@@ -122,24 +122,54 @@ infraestrutura remota, Auth real ou Storage. O relatório gerado fica em
 `.test-artifacts/restore-report.json`, ignorado pelo Git. Snapshot e chaves reais
 não são gravados no repositório; nenhuma cópia externa criptografada foi testada.
 
-### Migrações e bloqueio administrativo
+### Migrações e reconexão administrativa — bloqueio resolvido
 
-As cinco versões remotas inicialmente lidas coincidiram com os cinco arquivos
-anteriores. A nova `20261101143000_security_audit_mfa_corrections.sql` passou nos
-testes locais, mas o conector falhou ao renovar OAuth durante a tentativa de
-aplicação: `OAuth token refresh failed: Failed to parse server response`.
-Consultas seguintes ao histórico também falharam. Portanto **não há confirmação
-de aplicação dessa migração no projeto**; tratá-la como pendente, sem presumir
-que o estado remoto mudou. Não foi usado SQL por outro projeto nem chave
-privilegiada para contornar a falha. Antes de aplicar posteriormente, reler o
-histórico e o esquema para evitar replay; se o provedor tiver registrado outra
-versão, reconciliar o arquivo com a versão efetivamente aplicada.
+A tentativa anterior falhou com `OAuth token refresh failed` e não foi presumida
+como aplicada. Em 2026-11-02, após reconexão do proprietário, o MCP confirmou
+`otnwkxchugsovtjdanyu`. O histórico ainda tinha somente as cinco migrações antigas;
+o schema privado, as novas tabelas/coluna/RPCs/triggers estavam ausentes e a função
+de acesso ainda tinha a definição antiga. Não havia vestígio de aplicação parcial.
 
-Os testes hospedados atuais verificam o esquema anterior; os testes adicionais
-de administrador/MFA obrigatório, correções e auditoria no projeto ficam
-**bloqueados pela conexão administrativa**. Os fatores TOTP são efêmeros apenas
-para testar o fluxo; isso não habilita MFA permanente das contas ou da organização.
-O servidor de teste foi exercitado em loopback; não houve deploy de API pública.
+Somente a migração ausente foi aplicada. O provedor registrou a versão
+`20261102142059`, e o arquivo foi renomeado para
+`20261102142059_security_audit_mfa_corrections.sql`, preservando o SQL. Histórico e
+schema foram conferidos depois, inclusive RLS, triggers habilitados, grants e as
+duas exceções sintéticas AAL1 já previstas. As seis versões locais correspondem
+ao histórico remoto observado.
+
+Comparações de contagens, IDs e hashes antes/depois preservaram os campos originais
+das 2 unidades, 26 episódios e 29 observações que já existiam. As associações
+anteriores foram preservadas; a coluna institucional é uma adição explícita de
+schema, não um vínculo de paciente. Nenhuma observação antiga foi sobrescrita.
+
+`scripts/test-hosted-protected.js` passou com três contas sintéticas e duas novas
+unidades protegidas, com associações exclusivas da execução. Validou AAL1 negado,
+AAL2 real permitido, papéis leitor/clínico/admin, correção e vínculo imutáveis,
+idempotência, auditoria minimizada por unidade e revogação de acesso no banco após
+logout. Foram mantidos 3 novos eventos (incluindo a correção), 1 vínculo e seus
+eventos de auditoria. Os 2 episódios novos foram encerrados e os 3 fatores TOTP
+temporários foram removidos. Não foram apagadas unidades, eventos ou auditorias.
+
+Os fatores são efêmeros para teste: isso não habilita MFA permanente das contas
+ou da organização. As duas unidades legadas são exceções sintéticas explícitas,
+não uma autorização para dados reais. O servidor de teste foi apenas loopback.
+
+Após a aplicação, os 41 testes locais, a restauração isolada, a suíte de gravação
+hospedada e o navegador real passaram novamente. A restauração local repetida
+mediu 4188 ms de preparação, 166 ms de snapshot e 692 ms de restauração/verificação,
+sem perda dos registros comprometidos antes da cópia; continuam válidas as
+limitações dessa medição local. A comparação final, após todas as regressões,
+confirmou novamente os hashes/contagens dos registros antigos e das 3 associações
+anteriores. O episódio antigo que estava aberto permaneceu aberto.
+
+O advisor posterior informa ausência de políticas nas duas tabelas privadas:
+[RLS sem política](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy).
+Isso é intencional para negar acesso cliente, além de não haver USAGE no schema.
+As quatro funções públicas SECURITY DEFINER autorizadas continuam sinalizadas
+pelo [advisor de funções](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable);
+as verificações internas de unidade, função, MFA e sessão foram exercitadas, sem
+ampliar grants para silenciar o aviso. A [proteção contra senhas vazadas](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)
+continua desativada e é uma pendência de configuração do provedor.
 
 ### Matriz final de testes
 
@@ -153,8 +183,9 @@ O servidor de teste foi exercitado em loopback; não houve deploy de API públic
 | `npm audit --audit-level=high` | Zero vulnerabilidades conhecidas no resultado consultado; não é garantia de ausência de vulnerabilidades |
 | TLS do cliente | Verificação não desativada no ambiente; npm strict-ssl=true; requests hospedados concluídos com TLS normal |
 | Banco nativo via Docker | Aprovado no GitHub Actions: PostgreSQL 17, migrações locais, testes básicos/avançados e persistência após restart. Não executado localmente porque Docker está ausente |
-| Migração administrativa e novos controles no projeto | Bloqueados: OAuth do conector falhou sem confirmação de aplicação |
-| Backup/PITR e restauração hospedada completa | Bloqueados: plano, acesso administrativo e destino isolado não disponíveis por essa conexão |
+| Migração administrativa e novos controles no projeto | Aplicada como `20261102142059` e validada com testes Auth/HTTP/RPC/RLS reais após inspeção prévia sem vestígios parciais |
+| `node --env-file=.env.test scripts/test-hosted-protected.js` | Aprovado: AAL1/AAL2 de três papéis, correções, autoria, auditoria, isolamento, fechamento, logout e limpeza de fatores próprios |
+| Backup/PITR e restauração hospedada completa | Ainda não comprovados: o MCP SQL foi restabelecido, mas não expõe configuração de plano/backups nem destino isolado de restauração |
 | Cópia externa criptografada, KMS e retenção institucional | Não testados/configurados: dependem de capacidade/decisão externa, sem contratação ou custo novo |
 | GitHub Actions | Jobs `test` e `database` aprovados para o commit `8f1fd4c548a9257667842547af85b818eef58a2f`; instalação, build, audit, secret check, testes e restauração passaram |
 | Integração Vercel | Status de falha retornado pelo provedor; descrição genérica requer logs autenticados. Nenhum deploy foi acionado pelo agente nem houve alteração de produção |
@@ -175,9 +206,9 @@ teste para corrida entre renovação em andamento e encerramento da sessão.
 
 ## Limites e tarefas remanescentes por prioridade
 
-- **P0:** recuperar a capacidade administrativa do conector, conferir/aplicar a
-  migração pendente e executar as mesmas verificações com usuários reais de teste
-  no banco hospedado; não liberar dados reais antes disso.
+- **Resolvido em 2026-11-02:** conexão administrativa recuperada, schema/histórico
+  inspecionados, migração ausente aplicada e controles novos testados no banco
+  hospedado. A liberação de dados reais continua bloqueada pelos itens seguintes.
 - **P0:** comprovar plano/backups/PITR, restauração completa hospedada em destino
   isolado, cópias criptografadas fora do domínio administrativo da aplicação e
   proteção contra exclusão/ransomware. O provedor e o app não são a mesma fronteira.
@@ -196,8 +227,8 @@ teste para corrida entre renovação em andamento e encerramento da sessão.
 - **P1:** política de retenção/eliminações em todos os armazenamentos. Não há job
   destrutivo automático nem prazo legal/institucional inventado. A memória de sessão
   tem teto técnico de 2h; dados sintéticos persistentes e logs exigem decisão própria.
-- **P1:** UI de correções e histórico de vínculos após a migração; hoje a rota/RPC
-  está preparada. Correção após encerramento é negada; adendo clínico exigirá desenho
+- **P1:** UI de correções e histórico de vínculos; hoje a rota/RPC
+  está ativa no desenvolvimento. Correção após encerramento é negada; adendo clínico exigirá desenho
   explícito. A proposta de escores remotos continua sem implementação.
 
 ## Operação e resposta a incidentes
@@ -225,7 +256,7 @@ teste para corrida entre renovação em andamento e encerramento da sessão.
 
 ## Checklist de liberação futura
 
-- [ ] Migração pendente aplicada e testes hospedados de AAL1/AAL2/admin aprovados.
+- [x] Migração aplicada e testes hospedados sintéticos de AAL1/AAL2/admin aprovados.
 - [ ] Revisão independente de código, dependências, infraestrutura e pentest.
 - [ ] Identidade institucional, MFA/recuperação, IAM e segregação administrativa aprovados.
 - [ ] Restauração completa, cópias isoladas criptografadas e RPO/RTO aprovados.

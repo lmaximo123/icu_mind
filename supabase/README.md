@@ -32,7 +32,7 @@ Never run the test bootstrap on a Supabase project. CI runs both suites.
    Auth settings separately.
 3. The local migration versions match the development project's history:
    `20261031225711`, `20261031225712`, `20261031225830`,
-   `20261031230035`, `20261031230053`.
+   `20261031230035`, `20261031230053`, `20261102142059`.
    PR #1's filenames shared the CLI version prefix `20261031`.
    If those old files were already applied remotely, reconcile the actual schema
    and migration history with the owner first. Do not replay or blindly repair them.
@@ -93,10 +93,11 @@ time. Identical retries return the original event, including after closure;
 changed payloads with the same ID fail. Measurements before encounter creation or
 new writes after closure fail. UPDATE/DELETE privileges are revoked; an additional
 trigger prevents accidental privileged mutation. An additive correction RPC and
-`POST /api/observations/correct` are now prepared and tested locally: the original
+`POST /api/observations/correct` are applied and tested in development: the original
 is preserved, the replacement is another validated event and a reason-code link
-records provenance. This requires the pending security migration below; it is
-not claimed as active remotely and has no automatic correction UI.
+records provenance. The security migration was applied as `20261102142059` after
+history/schema inspection confirmed no partial processing. There is no automatic
+correction UI. New corrections after closure are rejected; exact prior retries work.
 
 ## Opt-in UI integration
 
@@ -124,7 +125,7 @@ renew button use `/api/auth/refresh`; restarting the server loses this vault and
 requires login again. Reload still requires login. Existing verified TOTP factors
 can be challenged through `/api/auth/mfa` and the UI; enrollment/recovery remain
 controlled official Auth operations, not public signup. Issued JWTs can remain
-valid until expiration after logout on the legacy synthetic fixtures. The pending
+valid until expiration after logout on the legacy synthetic fixtures. The active
 protected-unit database policy additionally checks active Auth sessions. Do not
 deploy this synthetic-only login publicly.
 
@@ -314,6 +315,23 @@ denial, MFA, refresh and concurrent closure/idempotency still require dedicated
 synthetic users and fixtures; successful unit listing alone does not prove them.
 
 ## Hosted synthetic write security suite
+
+For the additional MFA/audit/correction suite after migration `20261102142059`,
+`scripts/prepare-protected-fixtures.js` generates UUIDs, an ignored JSON manifest
+and administrative SQL under `.test-artifacts/`. Confirm the MCP URL matches
+`otnwkxchugsovtjdanyu` and inspect the schema before executing that SQL via the
+trusted connection. It only inserts new synthetic units and associations for
+the three existing test accounts; collisions abort instead of updating rows.
+Then execute `node --env-file=.env.test scripts/test-hosted-protected.js`.
+
+This additional suite was executed successfully on 2026-11-02. It uses real
+password login and temporary TOTP factors for reader, clinician and admin roles,
+tests AAL1 denial and AAL2 access through RLS, append-only correction and its link,
+audit isolation/minimization, direct mutation and privilege escalation denial,
+closure/retry and active-session revocation. New events/audit records are kept;
+only the invocation's new episodes are closed and its own factors are removed.
+It does not provision Auth identities or modify the pre-existing unit memberships.
+The local manifest/result files contain synthetic IDs only and remain ignored.
 
 `scripts/test-hosted-writes.js` exercises real Auth, the browser adapter, local
 HTTP API, PostgREST and database policies on the authorized development project.

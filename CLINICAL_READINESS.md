@@ -25,7 +25,7 @@ O responsável relatou gravação de duas observações sintéticas, recarga da 
 - Procedimentos de resposta a incidentes, governança de modelo e análise regulatória/ética.
 
 ## Testes disponíveis
-Execute `npm ci --ignore-scripts`, `npm run build` e `node --test tests/*.test.js` com Node.js >=22. Há também testes de navegador e Auth sintéticos e restauração em PostgreSQL isolado. Evidências, controles ativos versus preparados e bloqueios estão em [docs/security-foundation.md](docs/security-foundation.md). A migração adicional de MFA/auditoria/correções não teve aplicação remota confirmada devido à falha OAuth do conector. Nenhum desses resultados demonstra aptidão para dados reais, conformidade LGPD ou eficácia clínica.
+Execute `npm ci --ignore-scripts`, `npm run build` e `node --test tests/*.test.js` com Node.js >=22. Há também testes de navegador e Auth sintéticos e restauração em PostgreSQL isolado. Evidências, controles ativos versus preparados e bloqueios estão em [docs/security-foundation.md](docs/security-foundation.md). A migração de MFA/auditoria/correções foi aplicada como `20261102142059` após inspeção do histórico/schema e validada no desenvolvimento com contas sintéticas AAL1/AAL2 e papéis leitor/clínico/admin. Nenhum desses resultados demonstra aptidão para dados reais, conformidade LGPD ou eficácia clínica.
 
 ## Limitações matemáticas
 Repetição da mesma fórmula não produz verificações independentes. Erros correlacionados, viés de extração, mudança de população e dados de origem errados persistem mesmo quando múltiplos algoritmos concordam. Não é possível demonstrar erro clínico nulo; mensurar desempenho, intervalos de confiança, calibração e taxa de abstenção em dados independentes.
