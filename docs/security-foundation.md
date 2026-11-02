@@ -152,10 +152,19 @@ O servidor de teste foi exercitado em loopback; não houve deploy de API públic
 | `node --env-file=.env.test scripts/test-remote-browser.js` | Aprovado em Chrome real, inclusive OCR local, áudio simulado, backup local, MFA/renovação, recarga e isolamento |
 | `npm audit --audit-level=high` | Zero vulnerabilidades conhecidas no resultado consultado; não é garantia de ausência de vulnerabilidades |
 | TLS do cliente | Verificação não desativada no ambiente; npm strict-ssl=true; requests hospedados concluídos com TLS normal |
-| Banco nativo via Docker | Não executado localmente: Docker ausente; Bash existe no diretório do Git mas não há daemon Docker. PostgreSQL WASM foi executado em vez de declarar o teste nativo aprovado |
+| Banco nativo via Docker | Aprovado no GitHub Actions: PostgreSQL 17, migrações locais, testes básicos/avançados e persistência após restart. Não executado localmente porque Docker está ausente |
 | Migração administrativa e novos controles no projeto | Bloqueados: OAuth do conector falhou sem confirmação de aplicação |
 | Backup/PITR e restauração hospedada completa | Bloqueados: plano, acesso administrativo e destino isolado não disponíveis por essa conexão |
 | Cópia externa criptografada, KMS e retenção institucional | Não testados/configurados: dependem de capacidade/decisão externa, sem contratação ou custo novo |
+| GitHub Actions | Jobs `test` e `database` aprovados para o commit `8f1fd4c548a9257667842547af85b818eef58a2f`; instalação, build, audit, secret check, testes e restauração passaram |
+| Integração Vercel | Status de falha retornado pelo provedor; descrição genérica requer logs autenticados. Nenhum deploy foi acionado pelo agente nem houve alteração de produção |
+
+Evidência externa de CI: [execução de push 41365409863](https://github.com/lmaximo123/icu_mind/actions/runs/41365409863).
+A execução do evento de pull request para o mesmo SHA também terminou com sucesso
+(41365413539). Não foi criado nem feito merge de pull request nesta execução.
+A falha de Vercel não foi ignorada ou convertida em teste aprovado; o acesso a
+logs e configuração dessa integração é uma pendência separada, sem tentativa de
+publicar ou alterar sua configuração.
 
 Uma execução intermediária do navegador encontrou falha na limpeza após MFA:
 vários JWTs representavam a mesma sessão Auth. O rastreamento e a limpeza foram
