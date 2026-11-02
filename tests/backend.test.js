@@ -40,7 +40,7 @@ test('development server serves existing app assets under one origin and hides p
   const { base } = await fixture(t, {}, { staticRoot: require('node:path').resolve(__dirname, '..') });
   const page = await fetch(base + '/');
   assert.equal(page.status, 200); assert.match(await page.text(), /Osler \|/);
-  for (const file of ['app.js', 'score-ui.js', 'clinical-scores.js', 'osler-validation.js', 'osler-logo.svg', 'backend-client.js', 'remote-session.js', 'remote-ui.js']) {
+  for (const file of ['app.js', 'score-ui.js', 'clinical-scores.js', 'osler-validation.js', 'osler-logo.svg', 'backend-client.js', 'remote-session.js', 'remote-ui.js', 'clinical-engine.js', 'remote-engine-ui.js']) {
     const asset = await fetch(base + '/' + file);
     assert.equal(asset.status, 200); assert.ok((await asset.text()).length > 0);
   }

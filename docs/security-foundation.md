@@ -6,6 +6,10 @@ clínica, conformidade LGPD ou autorização para dados reais.
 
 ## Matriz vigente de pendências — 2026-11-02
 
+Prioridade de desenvolvimento: [engine clínica sintética](clinical-engine-plan.md)
+e controles técnicos necessários à integração. Os bloqueios externos abaixo
+impedem dados reais, mas não suspendem tarefas independentes da engine.
+
 Esta matriz prevalece sobre os relatos históricos abaixo. **Comprovado** significa
 teste executado no escopo sintético indicado; não certifica uso clínico.
 **Implementado, não verificado** exige evidência operacional adicional.

@@ -29,6 +29,7 @@
   let context = '', savedId = '';
   const controller = OslerRemote.createController({ onChange: render });
   function render(state) {
+    window.dispatchEvent(new CustomEvent('osler-remote-state', { detail: state }));
     const connected = !!state.user && !state.expired;
     const pending = !!(state.pending || state.pendingEncounter);
     const episode = state.encounters.find(row => row.id === state.encounterId);

@@ -286,13 +286,31 @@ async function main() {
     assert.ok(!serializedLogs.includes('Rascunho sintético local'));
     console.log('PASS: no external HTTP origins, no credentials/clinical values in audit logs, and refresh stays server-side.');
     stage = 'browser second reviewed observation';
-    await saveReviewed('7,35');
+    await change('remote-concept','creatinine');
+    await saveReviewed('1,0');
     assert.equal(writes, 3); // Lost first response, retry, then a second distinct observation.
     const beforeReload = await browserApi('/api/observations?encounter_id=' + encounterId);
     assert.equal(beforeReload.status, 200); assert.equal(beforeReload.body.length, 2);
     assert.equal(new Set(beforeReload.body.map(row => row.id)).size, 2);
     const historyBeforeReload = await visibleHistory();
     assert.equal(historyBeforeReload.length, 2);
+    stage = 'browser isolated engine preview and explicit review';
+    assert.equal(await evaluate(`document.getElementById('engine-catalog').children.length`),6);
+    assert.equal(await evaluate(`document.querySelectorAll('#engine-candidates input:checked').length`),0);
+    await click('engine-preview');
+    assert.ok(await evaluate(`document.getElementById('engine-result').textContent.includes('recusada')`));
+    await evaluate(`document.querySelector('#engine-candidates input').click();document.getElementById('engine-confirm').checked=true`);
+    await click('engine-preview');
+    const preview=JSON.parse(await evaluate(`document.getElementById('engine-result').textContent`));
+    assert.equal(preview.result.status,'abstained');assert.equal(preview.result.estimate,undefined);
+    assert.equal(preview.provenance.unitId,fixtures.unitA);assert.equal(preview.provenance.encounterId,encounterId);
+    assert.ok(beforeReload.body.some(e=>e.id===preview.provenance.events[0].id));
+    assert.equal(writes,3);checkDrafts(await localDrafts(),draftsBefore);
+    await click('remote-refresh');
+    await waitFor(`!document.getElementById('remote-refresh').disabled`);
+    assert.equal(await evaluate(`document.querySelectorAll('#engine-candidates input:checked').length`),0);
+    assert.ok(await evaluate(`document.getElementById('engine-result').textContent.includes('invalidada')`));
+    console.log('PASS: isolated remote engine requires explicit review, retains provenance, abstains on missing criteria and invalidates on refresh without changing drafts or writing.');
     console.log('PASS: UI login, two reviewed writes, lost-response retry without duplicate IDs.');
 
     stage = 'browser reload, fresh login and recovery of exact records';
@@ -304,6 +322,7 @@ async function main() {
     await evaluate(`document.getElementById('remote-panel').open=true`);
     assert.equal(await evaluate(`document.getElementById('remote-account').hidden`), true);
     assert.equal(await evaluate(`document.getElementById('remote-workspace').hidden`), true);
+    assert.ok(!(await evaluate(`document.getElementById('engine-result').textContent`)).includes(encounterId));
     assert.equal(await evaluate(`localStorage.length + sessionStorage.length`), 0);
     await login(users[1]);
     assert.equal(await evaluate(`document.getElementById('remote-unit').value`), '');

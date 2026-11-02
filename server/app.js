@@ -41,6 +41,9 @@ const staticAssets = {
   '/backend-client.js': ['backend-client.js', 'text/javascript; charset=utf-8'],
   '/remote-session.js': ['remote-session.js', 'text/javascript; charset=utf-8'],
   '/remote-ui.js': ['remote-ui.js', 'text/javascript; charset=utf-8'],
+  '/clinical-engine.js': ['clinical-engine.js', 'text/javascript; charset=utf-8'],
+  '/clinical-catalog.js': ['clinical-catalog.js', 'text/javascript; charset=utf-8'],
+  '/remote-engine-ui.js': ['remote-engine-ui.js', 'text/javascript; charset=utf-8'],
   '/ui-bindings.js': ['ui-bindings.js', 'text/javascript; charset=utf-8'],
   '/osler-logo.svg': ['osler-logo.svg', 'image/svg+xml']
 };
