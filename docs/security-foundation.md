@@ -13,6 +13,12 @@ Na continuidade, a migração aditiva `20261102224140_engine_snapshot.sql` foi a
 e validada sob RLS/MFA sem alterar políticas existentes. Sete migrações locais
 correspondem ao histórico remoto. A prévia CG usa suplementos revisados em memória;
 isso não equivale a persistência/auditoria durável de decisões clínicas.
+O fluxo de [imagens sintéticas](synthetic-image-workflow.md) acrescenta proveniência
+imutável de observações revisadas na migração `20261102233142`. Oito migrações
+correspondem ao remoto. Imagens não são enviadas; trecho fonte confirmado, hashes,
+ajustes e horários explícitos são dados remotos autorizados sob RLS. A política de
+câmera agora permite somente a própria origem e continua exigindo permissão do
+usuário. Isso não amplia ingresso de rede nem autoriza captura/upload em produção.
 
 Esta matriz prevalece sobre os relatos históricos abaixo. **Comprovado** significa
 teste executado no escopo sintético indicado; não certifica uso clínico.

@@ -6,6 +6,7 @@ const { randomUUID } = require('node:crypto');
 const { securityHeaders, checkOrigin, page, createLimiter, routeLabel } = require('./security.js');
 const { ApiError } = require('./supabase.js');
 const { validate, rules } = require('../osler-validation.js');
+const documentReview=require('../document-review.js');
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const concepts = { heartRate: 'heart_rate', tidalVolume: 'tidal_volume', respiratoryRate: 'respiratory_rate' };
 function checkId(value) {
@@ -45,6 +46,10 @@ const staticAssets = {
   '/engine-review.js': ['engine-review.js', 'text/javascript; charset=utf-8'],
   '/clinical-catalog.js': ['clinical-catalog.js', 'text/javascript; charset=utf-8'],
   '/remote-engine-ui.js': ['remote-engine-ui.js', 'text/javascript; charset=utf-8'],
+  '/document-review.js': ['document-review.js', 'text/javascript; charset=utf-8'],
+  '/document-ui.js': ['document-ui.js', 'text/javascript; charset=utf-8'],
+  '/local-ocr.js': ['local-ocr.js', 'text/javascript; charset=utf-8'],
+  '/synthetic-images.js': ['synthetic-images.js', 'text/javascript; charset=utf-8'],
   '/ui-bindings.js': ['ui-bindings.js', 'text/javascript; charset=utf-8'],
   '/osler-logo.svg': ['osler-logo.svg', 'image/svg+xml']
 };
@@ -144,6 +149,13 @@ function createServer(store, { staticRoot, enableRemoteUI = false, rateLimits, o
         for(const key of ['window_start','window_end'])if(typeof body[key]!=='string'||!/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(body[key])||!Number.isFinite(Date.parse(body[key])))throw new ApiError(422,'Invalid interval');
         if(Date.parse(body.window_start)>Date.parse(body.window_end)||Date.parse(body.window_end)-Date.parse(body.window_start)>31*86400000)throw new ApiError(422,'Invalid interval');
         result=await store.engineSnapshot(token,{target_unit:body.unit_id,target_episode:body.encounter_id,window_start:body.window_start,window_end:body.window_end});
+      } else if (path.pathname === '/api/document-observations' && req.method === 'POST') {
+        const body=await readBody(req);fields(body,['id','unit_id','encounter_id','concept','value','unit','timestamp','confirmed','source']);
+        try{documentReview.validate(body);}catch{throw new ApiError(422,'Invalid reviewed document');}
+        result=await store.appendDocumentObservation(token,{event_id:body.id,target_unit:body.unit_id,target_encounter:body.encounter_id,
+          observation_concept:concepts[body.concept]||body.concept,observation_value:body.value,observation_unit:body.unit,observation_time:body.timestamp,source:body.source});
+      } else if (path.pathname === '/api/document-observations' && req.method === 'GET') {
+        result=await store.listDocumentSources(token,checkId(path.searchParams.get('encounter_id')),page(path.searchParams,['encounter_id']));
       } else if (path.pathname === '/api/observations' && req.method === 'GET') {
         result = await store.listObservations(token, checkId(path.searchParams.get('encounter_id')), page(path.searchParams, ['encounter_id']));
       } else if (path.pathname === '/api/observations/correct' && req.method === 'POST') {
@@ -173,7 +185,8 @@ function createServer(store, { staticRoot, enableRemoteUI = false, rateLimits, o
     } catch (error) {
       res.statusCode = error instanceof ApiError ? error.status : 500;
       if (res.statusCode === 429) res.setHeader('Retry-After', '60');
-      res.end(JSON.stringify({ error: error instanceof ApiError ? error.message : 'Internal error' }));
+      const publicErrors={400:'Invalid request',401:'Invalid session',403:'Access denied',404:'Not found',409:'Conflicting record',413:'Request too large',415:'JSON required',422:'Invalid record',429:'Too many requests',500:'Internal error',503:'Backend unavailable'};
+      res.end(JSON.stringify({error:publicErrors[res.statusCode]||'Request failed'}));
     }
   });
   server.requestTimeout = 15000; server.headersTimeout = 10000; server.keepAliveTimeout = 5000;

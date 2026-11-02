@@ -5,7 +5,7 @@ function securityHeaders(res) {
   const headers = {
     'Cache-Control': 'no-store', 'Pragma': 'no-cache', 'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY',
-    'Permissions-Policy': 'camera=(), microphone=(self), geolocation=(), payment=(), usb=()',
+    'Permissions-Policy': 'camera=(self), microphone=(self), geolocation=(), payment=(), usb=()',
     'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Resource-Policy': 'same-origin',
     'Content-Security-Policy': "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; connect-src 'self'; worker-src 'self' blob:; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
   };
@@ -54,6 +54,6 @@ function createLimiter({ now = Date.now, loginLimit = 20, readLimit = 600, write
 }
 function routeLabel(pathname) {
   if (/^\/api\/encounters\/[^/]+\/close$/.test(pathname)) return '/api/encounters/:id/close';
-  return ['/api/auth/login','/api/auth/logout','/api/auth/refresh','/api/auth/mfa','/api/auth/config','/api/units','/api/encounters','/api/observations','/api/observations/correct','/api/engine/snapshot'].includes(pathname) ? pathname : 'other';
+  return ['/api/auth/login','/api/auth/logout','/api/auth/refresh','/api/auth/mfa','/api/auth/config','/api/units','/api/encounters','/api/observations','/api/observations/correct','/api/engine/snapshot','/api/document-observations'].includes(pathname) ? pathname : 'other';
 }
 module.exports = { securityHeaders, checkOrigin, page, createLimiter, routeLabel };

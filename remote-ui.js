@@ -28,12 +28,15 @@
   function dateLabel(value) { return new Date(value).toLocaleString('pt-BR'); }
   let context = '', savedId = '';
   let engineUI;
+  let documentUI;
   const controller = OslerRemote.createController({ onChange: render });
   engineUI=OslerRemoteEngineUI.create({loadSnapshot:interval=>controller.loadEngineSnapshot(interval)});
+  documentUI=OslerDocumentUI.create({sendBatch:rows=>controller.sendDocumentBatch(rows),retryBatch:()=>controller.retryDocumentBatch(),verifyBatch:()=>controller.verifyDocumentBatch(),pauseBatch:()=>controller.pauseDocumentBatch(),discardBatch:()=>controller.discardDocumentBatch(),loadSources:()=>controller.loadDocumentSources()});
   function render(state) {
     engineUI?.render(state);
+    documentUI?.render(state);
     const connected = !!state.user && !state.expired;
-    const pending = !!(state.pending || state.pendingEncounter);
+    const pending = !!(state.pending || state.pendingEncounter || state.documentBatch?.rows.some(row=>row.status!=='confirmed'));
     const episode = state.encounters.find(row => row.id === state.encounterId);
     $('remote-login').hidden = connected;
     $('remote-account').hidden = !state.user;
@@ -66,8 +69,8 @@
     $('remote-measurement').noValidate = !!state.pending;
     const unit = state.units.find(row => row.id === state.unitId);
     $('remote-destination').textContent = episode ? `${unit?.label || ''} · Leito ${episode.bed_code} · Episódio ${episode.id} · ${episode.ended_at ? 'ENCERRADO' : 'ABERTO'}` : 'Nenhum episódio selecionado. O seletor de leitos locais não escolhe um destino remoto.';
-    $('remote-pending').hidden = !pending;
-    $('remote-discard').hidden = !pending;
+    $('remote-pending').hidden = !(state.pending||state.pendingEncounter);
+    $('remote-discard').hidden = !(state.pending||state.pendingEncounter);
     $('remote-discard').disabled = state.busy;
     $('remote-pending').textContent = state.pending ? `Tentativa pendente: ${state.pending.measurement.id}. O conteúdo e destino estão fixos para retry. Não reenvie com outro ID antes de conferir o histórico.` :
       state.pendingEncounter ? `Abertura pendente: ${state.pendingEncounter.id}. Confira no servidor antes de descartar.` : '';
@@ -99,7 +102,7 @@
   });
   $('remote-logout').addEventListener('click', () => {
     const state = controller.getState();
-    if ((state.pending || state.pendingEncounter) && !window.confirm('Há uma tentativa sem confirmação. Ela pode existir no servidor. Sair apagará seu ID desta tela. Deseja sair mesmo assim?')) return;
+    if ((state.pending || state.pendingEncounter || state.documentBatch?.rows.some(row=>row.status!=='confirmed')) && !window.confirm('Há tentativas sem confirmação. O lote documental mantém seus IDs nesta aba para a mesma conta; recarregar perde a fila. Sair remove a imagem. Deseja sair mesmo assim?')) return;
     $('remote-password').value = ''; attempt(controller.logout());
   });
   $('remote-unit').addEventListener('change', () => attempt(controller.selectUnit($('remote-unit').value)));
@@ -125,7 +128,7 @@
   });
   window.addEventListener('beforeunload', event => {
     const state = controller.getState();
-    if (state.busy || state.pending || state.pendingEncounter) { event.preventDefault(); event.returnValue = ''; }
+    if (state.busy || state.pending || state.pendingEncounter || state.documentBatch?.rows.some(row=>row.status!=='confirmed')) { event.preventDefault(); event.returnValue = ''; }
   });
   render(controller.getState());
   fetch('/api/auth/config', { credentials: 'omit', cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(10000) })

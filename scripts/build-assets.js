@@ -21,7 +21,7 @@ for (const file of fs.readdirSync('node_modules/tesseract.js-core')) {
 }
 for (const [source, destination] of copies) fs.copyFileSync(source, destination);
 execFileSync(process.execPath, ['node_modules/tailwindcss/lib/cli.js', '-i', 'styles/input.css', '-o', 'vendor/app.css',
-  '--minify', '--content', './index.html,./app.js,./score-ui.js,./remote-ui.js'], { stdio: 'pipe' });
+  '--minify', '--content', './index.html,./app.js,./score-ui.js,./remote-ui.js,./remote-engine-ui.js,./document-ui.js'], { stdio: 'pipe' });
 const files = ['vendor/app.css', ...copies.map(row => row[1])].sort();
 const manifest = files.map(file => ({ file, sha256: createHash('sha256').update(fs.readFileSync(file)).digest('hex'), bytes: fs.statSync(file).size }));
 fs.writeFileSync('vendor/manifest.json', JSON.stringify({ files: manifest }, null, 2) + '\n');

@@ -44,11 +44,20 @@ test('engine snapshot is authenticated, strictly scoped and schema-validated wit
  const response=await call('/api/engine/snapshot',body);assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');
  assert.equal(calls.length,1);assert.equal(calls[0].body.target_unit,id);assert.equal(calls[0].token,'synthetic.session');
 });
+test('document API uses reviewed scalar schema, rejects image/unknown provenance, preserves JWT and sanitizes reader denial (mock store)',async t=>{
+ const {row}=require('./fixtures/document-fixture.js');const calls=[];
+ const {call}=await fixture(t,{appendDocumentObservation:async(token,body)=>{calls.push({token,body});return {event:{id:body.event_id},source:body.source};}});
+ const body=row();const response=await call('/api/document-observations',body);assert.equal(response.status,200);assert.equal(calls[0].token,'synthetic.session');assert.equal(calls[0].body.target_unit,body.unit_id);
+ assert.equal((await call('/api/document-observations',{...body,image:'data:image/png;base64,forbidden'})).status,400);
+ assert.equal((await call('/api/document-observations',{...body,source:{...body.source,image:'forbidden'}})).status,422);
+ assert.equal((await call('/api/document-observations',{...body,timestamp:null})).status,422);assert.equal(calls.length,1);
+ const denied=await fixture(t,{appendDocumentObservation:async()=>{throw new ApiError(403,'provider details suppressed');}});const forbidden=await denied.call('/api/document-observations',body);assert.equal(forbidden.status,403);assert.ok(!(await forbidden.text()).includes('provider details'));
+});
 test('development server serves existing app assets under one origin and hides private files', async t => {
   const { base } = await fixture(t, {}, { staticRoot: require('node:path').resolve(__dirname, '..') });
   const page = await fetch(base + '/');
   assert.equal(page.status, 200); assert.match(await page.text(), /Osler \|/);
-  for (const file of ['app.js', 'score-ui.js', 'clinical-scores.js', 'osler-validation.js', 'osler-logo.svg', 'backend-client.js', 'remote-session.js', 'remote-ui.js', 'clinical-engine.js', 'remote-engine-ui.js', 'engine-review.js']) {
+  for (const file of ['app.js', 'score-ui.js', 'clinical-scores.js', 'osler-validation.js', 'osler-logo.svg', 'backend-client.js', 'remote-session.js', 'remote-ui.js', 'clinical-engine.js', 'remote-engine-ui.js', 'engine-review.js','local-ocr.js','document-review.js','document-ui.js','synthetic-images.js']) {
     const asset = await fetch(base + '/' + file);
     assert.equal(asset.status, 200); assert.ok((await asset.text()).length > 0);
   }

@@ -287,18 +287,13 @@ async function processarFotoOCR() {
     return;
   }
   lockOCR(true);
-  let worker;
+  const runner=OslerLocalOCR.createRunner();
   try {
     $('upload-status').textContent = 'Carregando leitor OCR em português…';
-    worker = await Tesseract.createWorker('por', 1, {
-      workerPath: '/vendor/worker.min.js', corePath: '/vendor', langPath: '/vendor',
-      cacheMethod: 'none', // No OCR model or image persistence in IndexedDB.
-      logger: message => {
-        if (message.status === 'recognizing text') $('upload-status').textContent = 'Reconhecendo texto… ' + Math.round(message.progress * 100) + '%';
-      }
+    const result = await runner.recognize(selectedFile,message=>{
+      if(message.status==='recognizing text')$('upload-status').textContent='Reconhecendo texto… '+Math.round(message.progress*100)+'%';
     });
-    const result = await worker.recognize(selectedFile);
-    const text = result.data.text.trim();
+    const text = result.text.trim();
     $('ocr-text').value = text;
     draft().ocr[currentTab] = text;
     markDirty();
@@ -307,7 +302,6 @@ async function processarFotoOCR() {
   } catch {
     $('upload-status').textContent = 'Não foi possível reconhecer o texto. Verifique a conexão, tente outra imagem ou digite as notas.';
   } finally {
-    if (worker) { try { await worker.terminate(); } catch {} }
     lockOCR(false);
   }
 }

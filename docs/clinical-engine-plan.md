@@ -21,6 +21,24 @@ As etapas técnicas independentes acima foram executadas. O restante exige acess
 primário do SOFA, decisões clínicas explícitas de protocolo/contrato ou estudos
 institucionais; não preencher essas lacunas por convenções inventadas.
 
+## Prioridade entregue: imagem sintética até a engine
+
+O fluxo completo de arquivo/câmera → rotação/recorte → OCR local → revisão lado a
+lado → unidade/episódio explícitos → persistência por campo → prévia foi integrado.
+Ver [como abrir e experimentar](synthetic-image-workflow.md), incluindo limitações,
+tipos efetivamente testados e distinção entre mocks e OCR/Auth/RPC reais.
+O OCR legado foi preservado e reutiliza o mesmo helper local fixado. Não houve
+upload remoto de imagens, preenchimento de horários ausentes, migração de drafts
+ou remoção dos bloqueios de SOFA/RASS/KDIGO para demonstrar o fluxo.
+
+Migração `20261102233142_document_observations.sql` aplicada após inspeção sem
+vestígios parciais: evento e proveniência imutável por transação, RLS/MFA/função,
+retry de payload idêntico e auditoria minimizada. Oito versões locais/remotas.
+Hash dos 71 eventos anteriores preservado: `caf86e7a9770e6727939ebcaef7c2761`.
+Fila em memória suporta confirmações parciais, verificação e retries sem novos IDs;
+não sobrevive a reload/fechamento. A interface avisa essa limitação e não chama
+ausência de comprovante de prova de falha. Encerrar recusados não apaga confirmados.
+
 ## Evidências atuais — continuidade de 2026-11-02
 
 - Migração `20261102224140_engine_snapshot.sql` aplicada após inspeção do projeto,
@@ -135,6 +153,15 @@ Não reexecutar suíte hospedada concorrente sobre fixtures compartilhadas.
 - D009: avançar em RASS/KDIGO isolados e diagnóstico probabilístico sintético enquanto
   SOFA original está bloqueado por acesso primário. Fronteiras/protocolos clínicos
   não inferíveis permanecem explícitos em `instrument-specifications.md`.
+- D010: revisão documental é um contexto independente de drafts e leito local.
+  Imagens/original/ajustes permanecem no navegador durante a revisão; não há Storage
+  ou serviço OCR externo. Câmera somente com permissão do usuário, mesma origem.
+- D011: persistência é por campo com evento e proveniência atômicos, IDs fixos no
+  lote e estados confirmados/ambíguos/recusados explícitos. Não alegar atomicidade
+  do lote inteiro ou deduplicação entre novas importações após perder a fila.
+- D012: foto, documento, captura no navegador e medição são instantes distintos;
+  ausência não vira valor padrão. Confiança retornada pelo OCR é mostrada como tal,
+  não por campo e nunca como confiança clínica. Fonte/horário/alterações exigem revisão.
 
 ## Bloqueios para dados reais
 

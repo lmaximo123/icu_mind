@@ -16,6 +16,7 @@ async function main() {
     await db.exec(clean(await fs.readFile('supabase/tests/security.sql','utf8')));
     await db.exec(clean(await fs.readFile('supabase/tests/advanced-security.sql','utf8')));
     await db.exec(clean(await fs.readFile('supabase/tests/engine-snapshot.sql','utf8')));
+    await db.exec(clean(await fs.readFile('supabase/tests/document-observations.sql','utf8')));
     await db.exec(clean(await fs.readFile('supabase/tests/durability.sql','utf8')));
     await db.exec('reset role');
     const committed = performance.now();

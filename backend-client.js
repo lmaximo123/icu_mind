@@ -28,6 +28,8 @@
       closeEncounter: id => request(`/api/encounters/${encodeURIComponent(id)}/close`, 'POST'),
       listObservations: (encounterId,page) => request(`/api/observations?encounter_id=${encodeURIComponent(encounterId)}`+(paging(page)?'&'+paging(page):'')),
       engineSnapshot: body => request('/api/engine/snapshot','POST',body),
+      appendDocumentObservation: body=>request('/api/document-observations','POST',body),
+      listDocumentSources: (id,page)=>request(`/api/document-observations?encounter_id=${encodeURIComponent(id)}`+(paging(page)?'&'+paging(page):'')),
       correctObservation: correction => request('/api/observations/correct','POST',correction),
       // Generate and retain observation.id before the first attempt. Reuse that
       // exact ID and payload when retrying. Never silently fall back to local save.

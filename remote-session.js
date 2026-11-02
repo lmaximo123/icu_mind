@@ -3,10 +3,11 @@
   'use strict';
   const backend = typeof module !== 'undefined' && module.exports ? require('./backend-client.js') : root.OslerBackend;
   const validation = typeof module !== 'undefined' && module.exports ? require('./osler-validation.js') : root.OslerValidation;
+  const documents=typeof module!=='undefined'&&module.exports?require('./document-review.js'):root.OslerDocumentReview;
   function createController({ fetchImpl = root.fetch.bind(root), uuid = () => root.crypto.randomUUID(), now = () => Date.now(), onChange = () => {} } = {}) {
-    let token = null, expiry = 0, timer, refreshing, refreshingToken;
+    let token = null, expiry = 0, timer, refreshing, refreshingToken, documentPaused=false;
     const state = { user: null, expired: false, busy: false, units: [], unitId: '', encounters: [], encounterId: '',
-      observations: [], factors: [], pending: null, pendingEncounter: null, savedId: '', message: '', error: false };
+      observations: [], factors: [], pending: null, pendingEncounter: null, documentBatch:null, savedId: '', message: '', error: false };
     const snapshot = () => JSON.parse(JSON.stringify(state));
     const emit = () => onChange(snapshot());
     function expire() { token = null; state.expired = true; state.message = 'Sessão expirada. Entre novamente para continuar.'; state.error = true; emit(); }
@@ -42,7 +43,8 @@
       return refreshing;
     }
     function requireSession() { if (!token || state.expired) { const error = new Error('Session required'); error.status = 401; throw error; } }
-    function unresolved() { return state.pending || state.pendingEncounter; }
+    function documentPending(){return state.documentBatch?.rows.some(row=>row.status!=='confirmed');}
+    function unresolved() { return state.pending || state.pendingEncounter || documentPending(); }
     function requireResolved() { if (unresolved()) throw new Error('Resolve pending attempt'); }
     function invalid(message) { const error = new Error('Invalid input'); error.userMessage = message; throw error; }
     const selected = () => state.encounters.find(row => row.id === state.encounterId && row.unit_id === state.unitId);
@@ -68,8 +70,48 @@
       state.encounters = await api.listEncounters(state.unitId);
       if (!selected()) { state.encounterId = ''; state.observations = []; }
     }
+    function confirmDocument(row,reply){
+      const event=reply.event,m=row.request,concept=({heartRate:'heart_rate',tidalVolume:'tidal_volume',respiratoryRate:'respiratory_rate'})[m.concept]||m.concept;
+      if(!event||event.id!==m.id||event.encounter_id!==m.encounter_id||event.recorded_by!==state.documentBatch.userId||event.concept!==concept||Number(event.numeric_value)!==m.value||event.unit!==m.unit||event.source_type!=='document'||Date.parse(event.measured_at)!==Date.parse(m.timestamp)||documents.canonical(reply.source)!==documents.canonical(m.source))throw Error('Document confirmation mismatch');
+      row.status='confirmed';row.receipt={id:event.id,documentId:m.source.document_id};
+    }
+    async function sendDocuments(){
+      requireSession();const batch=state.documentBatch;
+      if(!batch||batch.userId!==state.user.id||!state.units.some(u=>u.id===batch.unitId))throw Error('Original authorized context required');
+      documentPaused=false;
+      for(const row of batch.rows){
+        if(row.status==='confirmed')continue;if(documentPaused)break;requireSession();
+        row.status='uncertain';emit();
+        try{confirmDocument(row,await api.appendDocumentObservation(row.request));}
+        catch(error){if([400,403,409,422].includes(error.status))row.status='rejected';throw error;}
+        emit();
+      }
+      state.message=documentPending()?'Lote pausado. Confira os itens e retome com os mesmos IDs.':'Todos os campos documentais confirmados; imagens podem ser descartadas.';
+      try{await history();}catch{state.message+=' Histórico indisponível; os comprovantes recebidos foram mantidos.';}
+    }
     return {
       getState: snapshot,
+      sendDocumentBatch:rows=>run(async()=>{
+        requireSession();requireResolved();const episode=selected();
+        if(!episode||episode.ended_at||!Array.isArray(rows)||!rows.length||rows.length>20||new Set(rows.map(r=>r.id)).size!==rows.length)throw Error('Reviewed document batch required');
+        for(const row of rows){documents.validate(row);if(row.unit_id!==state.unitId||row.encounter_id!==state.encounterId||row.source.document_id!==rows[0].source.document_id)throw Error('Document context mismatch');}
+        state.documentBatch={userId:state.user.id,unitId:state.unitId,encounterId:state.encounterId,documentId:rows[0].source.document_id,rows:JSON.parse(JSON.stringify(rows)).map(request=>({request,status:'unsubmitted'}))};
+        await sendDocuments();
+      }),
+      retryDocumentBatch:()=>run(sendDocuments),
+      pauseDocumentBatch(){documentPaused=true;state.message='Parando após a solicitação atual; ela ainda pode ser confirmada.';emit();},
+      verifyDocumentBatch:()=>run(async()=>{
+        requireSession();const batch=state.documentBatch;if(!batch||batch.userId!==state.user.id)throw Error('Original user required');
+        let rows=[];
+        for(let offset=0;offset<1000;offset+=100){const page=await api.listDocumentSources(batch.encounterId,{limit:100,offset});rows.push(...page);if(page.length<100)break;}
+        for(const row of batch.rows){const saved=rows.find(saved=>saved.observation_id===row.request.id);if(saved)confirmDocument(row,{event:saved.event,source:saved.metadata});}
+        state.message='Verificação concluída. Ausência no resultado não confirma que uma solicitação ambígua falhou; retome com o mesmo ID.';
+      }),
+      discardDocumentBatch(){
+        if(state.busy||state.documentBatch?.rows.some(row=>row.status==='uncertain'))throw Error('Resolve uncertain writes first');
+        if(state.documentBatch){state.documentBatch.omitted=state.documentBatch.rows.filter(row=>row.status!=='confirmed').map(row=>({id:row.request.id,status:row.status}));state.documentBatch.rows=state.documentBatch.rows.filter(row=>row.status==='confirmed');}emit();
+      },
+      async loadDocumentSources(){let rows;await run(async()=>{requireSession();const id=state.encounterId;if(!selected())throw Error('Explicit episode required');rows=await api.listDocumentSources(id);if(state.encounterId!==id)throw Error('Context changed');});return rows;},
       async loadEngineSnapshot(interval) {
         let result;
         await run(async()=>{
@@ -87,7 +129,7 @@
       login: (email, password) => run(async () => {
         const session = await auth('login', { email, password });
         if (!session.access_token || !session.user?.id || !Number.isFinite(session.expires_in) || session.expires_in <= 0) throw new Error('Invalid session');
-        if (unresolved() && state.user?.id !== session.user.id) {
+        if (unresolved() && (documentPending()?state.documentBatch.userId:state.user?.id) !== session.user.id) {
           await auth('logout', null, session.access_token);
           invalid('Há uma tentativa pendente de outra conta. Entre com a conta original ou descarte a tentativa após conferir o servidor.');
         }
@@ -104,6 +146,7 @@
         const accessToken = token;
         token = null; clearTimeout(timer);
         Object.assign(state, { user: null, expired: false, factors: [], units: [], unitId: '', encounters: [], encounterId: '', observations: [], pending: null, pendingEncounter: null, savedId: '' });
+        if(!documentPending())state.documentBatch=null;
         try {
           if (accessToken) { await auth('logout', null, accessToken); state.message = 'Sessão removida desta tela e logout confirmado pelo servidor.'; }
           else state.message = 'Sessão removida desta tela. A sessão expirada não foi revogada no servidor.';
@@ -136,6 +179,7 @@
       }),
       createEncounter: bed => run(async () => {
         requireSession();
+        if(documentPending())throw Error('Resolve document batch first');
         if (!state.unitId || state.pending || !/^\d{2,3}$/.test(bed)) throw new Error('Explicit unit and valid bed required');
         if (!state.pendingEncounter) state.pendingEncounter = { id: uuid(), unit_id: state.unitId, bed_code: bed };
         const request = state.pendingEncounter;
@@ -151,6 +195,7 @@
       }),
       save: input => run(async () => {
         requireSession();
+        if(documentPending())throw Error('Resolve document batch first');
         if (state.pendingEncounter || !selected()) throw new Error('Select explicit episode');
         if (!state.pending) {
           if (selected().ended_at) throw new Error('Episode closed');

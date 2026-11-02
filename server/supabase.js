@@ -111,6 +111,8 @@ function createStore({ url, key, fetchImpl = fetch, now = Date.now, sessionLifet
       { method: 'PATCH', body: { ended_at: new Date().toISOString() } }),
     listObservations: (token, id, page) => request(`/rest/v1/observation_events?encounter_id=eq.${id}&select=*&order=measured_at.desc,id.desc&${pagination(page)}`, token),
     engineSnapshot: (token, body) => request('/rest/v1/rpc/engine_snapshot',token,{method:'POST',body}),
+    appendDocumentObservation: (token,body)=>request('/rest/v1/rpc/append_document_observation',token,{method:'POST',body}),
+    listDocumentSources: (token,id,page)=>request(`/rest/v1/document_observation_sources?select=observation_id,metadata,event:observation_events!inner(id,encounter_id,recorded_by,numeric_value,concept,unit,measured_at,source_type)&event.encounter_id=eq.${id}&order=observation_id.asc&${pagination(page)}`,token),
     appendObservation: (token, body) => request('/rest/v1/rpc/append_observation', token, { method: 'POST', body }),
     correctObservation: (token, body) => request('/rest/v1/rpc/correct_observation', token, { method: 'POST', body })
   };
