@@ -4,6 +4,63 @@ Branch exclusiva: `develop/osler-secure-foundation`. Projeto: `otnwkxchugsovtjda
 Este documento registra implementação e evidências, não uma declaração de aptidão
 clínica, conformidade LGPD ou autorização para dados reais.
 
+## Matriz vigente de pendências — 2026-11-02
+
+Esta matriz prevalece sobre os relatos históricos abaixo. **Comprovado** significa
+teste executado no escopo sintético indicado; não certifica uso clínico.
+**Implementado, não verificado** exige evidência operacional adicional.
+**Ausente** identifica um controle ou evidência obrigatória que falta; disponibilidade
+desconhecida do provedor não significa backup desativado. P0 bloqueia qualquer
+consideração de liberação; P1 também deve ser resolvido antes de dados reais.
+
+### Controles comprovados no ambiente sintético
+
+| Controle | Evidência e limite |
+| --- | --- |
+| Cadastro público fechado | Teste hospedado de signup; não prova todo o processo institucional de provisionamento |
+| MFA AAL2 e sessão ativa no banco | Testes hospedados de REST/RPC, administrador e revogação; somente unidades protegidas, não adesão permanente |
+| Isolamento por unidade/episódio e função | Dois locais com mesmo leito, leitor sem escrita, chamadas diretas e navegador; leito nunca identifica paciente |
+| Persistência e integridade | Gravação, recarga/novo login, idempotência, concorrência, fechamento, correções sem sobrescrita e auditoria minimizada |
+| Navegador e dados locais | CSP/ativos próprios/OCR, ausência de upload automático de rascunhos, testes de sessão e exportação sintética |
+| Restauração local isolada | Snapshot PGlite restaurado e validado em segunda instância; não é restauração hospedada nem recuperação completa de Auth/Storage |
+
+As referências executáveis estão em [clinical-release-gates.json](clinical-release-gates.json)
+e as medições e execuções anteriores constam nas seções de evidências abaixo.
+
+### Implementados, mas sem verificação suficiente para operação futura
+
+| Prioridade | Controle | Evidência que falta | Responsável |
+| --- | --- | --- | --- |
+| P1 | Procedimento de incidente/revogação/rotação | Exercício com contatos, responsáveis, tempos e recuperação documentados | Operações, segurança e privacidade |
+| P1 | Limites, timeouts e cofre de sessões em memória | Carga-alvo, múltiplas instâncias, reinício e indisponibilidade; testes funcionais atuais não cobrem operação distribuída | Desenvolvimento e infraestrutura |
+
+### Ausentes ou sem evidência obrigatória
+
+| Prioridade | Pendência | Ação exata, responsável e custo |
+| --- | --- | --- |
+| **P0** | **Backup hospedado e restauração isolada** | Proprietário Supabase/infra: confirmar plano, pontos recuperáveis e backup em Database → Backups; aprovar destino distinto e orçamento; seguir [roteiro](hosted-recovery-runbook.md). Plano/capacidade atuais desconhecidos pelo MCP. Novo destino pode cobrar compute/disco/tráfego; nada contratado |
+| **P0** | **Proteção contra exclusão/ransomware** | Segurança/infra e custodiante separado: definir cópia criptografada isolada, retenção protegida contra exclusão, chaves e recuperação; provar que identidade comprometida da aplicação não apaga a cópia. Custos de armazenamento/KMS/tráfego dependem do desenho aprovado |
+| **P0** | **MFA permanente e recuperação** | Cada titular/IAM: cadastrar fatores sob sua custódia e testar recuperação; proprietário da organização verifica/exige MFA no painel após preparar membros. Zero fatores TOTP verificados observado hoje no Auth da aplicação; MFA da organização permanece desconhecido. TOTP não requer SMS; enforcement da organização depende de plano pago |
+| **P0** | **Revisão independente** | Instituição: nomear segurança independente, privacidade/jurídico e governança clínica; revisar arquitetura/RLS/RPC/dependências, executar pentest sintético, tratar achados e registrar decisão. Horas internas ou contratação, sem orçamento presumido |
+| P0 | Governança e identificação explícita de paciente | Instituição/controlador: aprovar finalidade, identidade/episódio, retenção por categoria, dispositivos, exportações, contratos e operadores. Trabalho institucional e infraestrutura a orçar |
+| P1 | Auditoria externa e alertas | Operações/segurança: destino durável separado, cobertura de leituras diretas/exportações, alertas e teste de falha de entrega. Ingestão/retencão/acesso podem ter custo |
+| P1 | Ingresso público protegido | Infra/segurança: desenhar HTTPS/HSTS, origem e controles distribuídos em ambiente aprovado; loopback atual não demonstra isso. Sem deploy; custo depende da infraestrutura |
+
+Consulta remota somente de leitura confirmou quatro unidades: duas com MFA exigido
+e duas exceções sintéticas preexistentes, preservadas; zero fatores TOTP permanentes
+e zero buckets. Não remover exceções por SQL indiscriminado: mapear titulares,
+inscrever fatores com custódia/recuperação, ensaiar acesso e revogação, então propor
+migração específica e reversível. Não criar fatores permanentes cuja custódia fique
+com o agente. MFA da aplicação e MFA dos administradores Supabase são controles
+distintos; tokens pessoais administrativos também precisam de inventário e rotação.
+[Enforcement da organização](https://supabase.com/docs/guides/platform/mfa/org-mfa-enforcement).
+
+O verificador `node scripts/check-clinical-readiness.js` retorna **2 (bloqueado)**,
+sem rede ou alterações. `--validate-only` valida a estrutura da matriz para CI e
+retorna 0 quando válida; isso não libera dados reais. Nem marcar todos os itens como
+comprovados concede autorização institucional. Os caminhos de evidência são
+referências, não atestados automáticos de execução recente. Nenhum segredo é lido.
+
 ## Inventário e fronteiras de confiança
 
 | Ativo/fluxo | Conteúdo atual | Fronteira e risco |

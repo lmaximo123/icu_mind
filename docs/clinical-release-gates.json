@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "reviewed_at": "2026-11-02",
+  "project_ref": "otnwkxchugsovtjdanyu",
+  "branch": "develop/osler-secure-foundation",
+  "environment": "synthetic-only",
+  "clinical_use_authorized": false,
+  "gates": [
+    {
+      "id": "hosted_restore",
+      "priority": "P0",
+      "state": "absent",
+      "required_for_real_data": true,
+      "description": "Evidência de backup hospedado e restauração isolada completa",
+      "availability": "unknown",
+      "evidence": [],
+      "owner": "Proprietário da organização Supabase e responsável por infraestrutura",
+      "action": "Confirmar plano e backup no painel; aprovar destino distinto e custo; executar restauração sem sobrescrever a origem e medir recuperação de banco, Auth e configuração.",
+      "cost": "Plano e cobrança atuais desconhecidos; restauração em outro projeto pode ter compute/armazenamento/egress. Nenhuma contratação autorizada."
+    },
+    {
+      "id": "deletion_resistant_copy",
+      "priority": "P0",
+      "state": "absent",
+      "required_for_real_data": true,
+      "description": "Cópia isolada criptografada e resistente à exclusão administrativa",
+      "availability": "not-configured-or-evidenced",
+      "evidence": [],
+      "owner": "Segurança e infraestrutura institucionais, com administrador de custódia separado",
+      "action": "Definir armazenamento e chaves separados; testar identidade comprometida da aplicação sem conseguir excluir a cópia; testar restauração e recuperação de chaves.",
+      "cost": "Depende de armazenamento, retenção, KMS e tráfego; exige orçamento explícito."
+    },
+    {
+      "id": "permanent_mfa",
+      "priority": "P0",
+      "state": "absent",
+      "required_for_real_data": true,
+      "description": "MFA permanente e recuperação para usuários e administradores",
+      "availability": "zero-verified-totp-observed",
+      "evidence": [],
+      "owner": "Cada titular de conta, proprietário da organização e responsável IAM institucional",
+      "action": "Cadastrar fatores em autenticadores sob custódia dos titulares; aprovar recuperação e contingência; exigir MFA da organização; planejar separadamente a aposentadoria das exceções sintéticas.",
+      "cost": "TOTP não exige SMS; plano para enforcement da organização deve ser confirmado no provedor."
+    },
+    {
+      "id": "independent_review",
+      "priority": "P0",
+      "state": "absent",
+      "required_for_real_data": true,
+      "description": "Revisão independente de segurança, privacidade e governança clínica",
+      "availability": "not-performed-or-provided",
+      "evidence": [],
+      "owner": "Responsável institucional, equipe de segurança independente, privacidade/jurídico e governança clínica",
+      "action": "Nomear revisores independentes, fixar escopo e critérios, executar revisão/pentest com dados sintéticos, tratar achados e emitir decisão formal.",
+      "cost": "Horas internas ou contratação sob orçamento; não estimado nem contratado."
+    },
+    {
+      "id": "clinical_governance",
+      "priority": "P0",
+      "state": "absent",
+      "required_for_real_data": true,
+      "description": "Identidade de paciente, retenção, dispositivos, contratos e autorização institucional",
+      "availability": "not-approved",
+      "evidence": [],
+      "owner": "Instituição/controlador, governança clínica, privacidade e jurídico",
+      "action": "Aprovar finalidade, identificação explícita de paciente/episódio, retenção por categoria, operadores, residência, dispositivos e exportações; não inferir vínculo pelo leito.",
+      "cost": "Trabalho institucional; custos de infraestrutura decorrentes precisam de orçamento próprio."
+    },
+    {
+      "id": "external_audit",
+      "priority": "P1",
+      "state": "absent",
+      "required_for_real_data": true,
+      "description": "Auditoria externa durável, cobertura de leitura direta e alertas",
+      "availability": "not-configured-or-evidenced",
+      "evidence": [],
+      "owner": "Operações e segurança institucionais",
+      "action": "Escolher sink externo, proteger acesso e exclusão, verificar logs de PostgREST e exportações, testar alertas e falha de entrega.",
+      "cost": "Depende de destino, ingestão, retenção e acesso; nenhum serviço pago configurado."
+    },
+    {
+      "id": "public_ingress",
+      "priority": "P1",
+      "state": "absent",
+      "required_for_real_data": true,
+      "description": "Ingresso HTTPS/HSTS e limites distribuídos",
+      "availability": "not-deployed",
+      "evidence": [],
+      "owner": "Infraestrutura e segurança",
+      "action": "Projetar ingresso e origem explícita, preservar validação TLS, testar certificados, HSTS, proxies e contenção de abuso antes de exposição.",
+      "cost": "Depende da infraestrutura aprovada; não houve deploy nem contratação."
+    },
+    {
+      "id": "incident_runbook",
+      "priority": "P1",
+      "state": "implemented_unverified",
+      "required_for_real_data": true,
+      "description": "Procedimento documentado de resposta e recuperação",
+      "availability": "documented-not-drilled",
+      "evidence": ["docs/security-foundation.md"],
+      "owner": "Operações, segurança e privacidade",
+      "action": "Realizar exercício com papéis, contatos e tempos definidos e registrar resultados; documentação não comprova prontidão operacional.",
+      "cost": "Horas da equipe e eventual ambiente aprovado para o exercício."
+    },
+    {
+      "id": "scale_and_outage_limits",
+      "priority": "P1",
+      "state": "implemented_unverified",
+      "required_for_real_data": true,
+      "description": "Limites e sessões implementados sem ensaio de carga/falha distribuída",
+      "availability": "single-process-only",
+      "evidence": ["tests/security.test.js", "server/security.js", "server/supabase.js"],
+      "owner": "Desenvolvimento e infraestrutura",
+      "action": "Definir carga-alvo e ensaiar múltiplas instâncias, reinício do cofre e indisponibilidade do provedor em destino autorizado; os testes atuais são funcionais/sintéticos.",
+      "cost": "Ensaio local possível sem novo serviço; carga hospedada requer limites/custo aprovados."
+    }
+  ],
+  "proven_synthetic_controls": [
+    { "id": "closed_signup", "evidence": ["scripts/test-hosted.js"] },
+    { "id": "protected_unit_aal2_and_session", "evidence": ["scripts/test-hosted-protected.js", "supabase/migrations/20261102142059_security_audit_mfa_corrections.sql"] },
+    { "id": "unit_episode_role_isolation", "evidence": ["scripts/test-hosted-protected.js", "scripts/test-remote-browser.js"] },
+    { "id": "append_only_corrections_audit", "evidence": ["scripts/test-hosted-protected.js", "supabase/tests/advanced-security.sql"] },
+    { "id": "self_hosted_csp_and_no_draft_upload", "evidence": ["scripts/test-remote-browser.js"] },
+    { "id": "isolated_local_snapshot_restore", "evidence": ["scripts/test-restore.js"] }
+  ]
+}

@@ -16,6 +16,7 @@ jobs:
       - run: npm run build
       - run: npm audit --audit-level=high
       - run: node scripts/check-secrets.js
+      - run: node scripts/check-clinical-readiness.js --validate-only
       - run: node --test tests/*.test.js
       - run: node scripts/test-restore.js
       - run: node --check app.js
