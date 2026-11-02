@@ -13,10 +13,11 @@
   <script src="/ui-bindings.js" defer></script>
   <script src="/backend-client.js" defer></script>
   <script src="/remote-session.js" defer></script>
-  <script src="/remote-ui.js" defer></script>
   <script src="/clinical-engine.js" defer></script>
   <script src="/clinical-catalog.js" defer></script>
+  <script src="/engine-review.js" defer></script>
   <script src="/remote-engine-ui.js" defer></script>
+  <script src="/remote-ui.js" defer></script>
   <link rel="stylesheet" href="/vendor/app.css">
 </head>
 <body id="main-body" class="p-4 md:p-6 min-h-screen">
@@ -106,11 +107,20 @@
         <h3 class="text-sm font-semibold">Histórico remoto do episódio · até 100 observações</h3>
         <ol id="remote-history" class="text-xs space-y-2" aria-label="Observações confirmadas pelo servidor"></ol>
         <section class="rounded-xl border p-4 space-y-2" aria-label="Prévia remota independente">
-          <p>Engine sintética · Cockcroft–Gault 1976-osler.1 · prévia parcial, sem persistência</p>
+          <p>Engine sintética · Cockcroft–Gault 1976-osler.1 · avaliação em memória, sem persistência</p>
           <details><summary>Catálogo versionado e limites de implementação</summary><div id="engine-catalog" class="text-xs space-y-2"></div></details>
-          <p>Selecione peso/creatinina individualmente. Demografia, estabilidade renal e correções pendentes impedem resultado numérico.</p>
+          <p>Selecione intervalo e eventos. Completude do banco não comprova cobertura clínica. Sem dose ou probabilidade; uso exclusivamente sintético.</p>
           <p id="engine-context" class="text-xs">Selecione explicitamente uma unidade e episódio.</p>
+          <label>Início do intervalo<input id="engine-start" type="datetime-local" step="0.001"></label>
+          <label>Fim do intervalo<input id="engine-end" type="datetime-local" step="0.001"></label>
+          <button id="engine-load" type="button" class="rounded-lg p-2 bg-slate-800" disabled>Consultar contexto consistente</button>
+          <p id="engine-coverage" class="text-xs">Nenhuma consulta preparada.</p>
           <div id="engine-candidates"></div>
+          <fieldset id="engine-supplements" class="text-xs space-y-2"><legend>Entradas suplementares sintéticas: revise cada item explicitamente</legend>
+            <label>Referência da avaliação sintética<input id="engine-source" maxlength="120" autocomplete="off"></label>
+            <label>Instante efetivo das entradas<input id="engine-effective" type="datetime-local" step="0.001"></label>
+            <div id="engine-supplement-fields"></div>
+          </fieldset>
           <label><input id="engine-confirm" type="checkbox"> Revisei os eventos e o contexto remoto explícito</label>
           <button id="engine-preview" type="button" class="rounded-lg p-2 bg-slate-800" disabled>Preparar prévia independente</button>
           <pre id="engine-result" class="text-xs whitespace-pre-wrap" role="status"></pre>

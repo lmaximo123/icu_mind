@@ -110,6 +110,7 @@ function createStore({ url, key, fetchImpl = fetch, now = Date.now, sessionLifet
     closeEncounter: (token, id) => request(`/rest/v1/encounters?id=eq.${id}&ended_at=is.null`, token,
       { method: 'PATCH', body: { ended_at: new Date().toISOString() } }),
     listObservations: (token, id, page) => request(`/rest/v1/observation_events?encounter_id=eq.${id}&select=*&order=measured_at.desc,id.desc&${pagination(page)}`, token),
+    engineSnapshot: (token, body) => request('/rest/v1/rpc/engine_snapshot',token,{method:'POST',body}),
     appendObservation: (token, body) => request('/rest/v1/rpc/append_observation', token, { method: 'POST', body }),
     correctObservation: (token, body) => request('/rest/v1/rpc/correct_observation', token, { method: 'POST', body })
   };

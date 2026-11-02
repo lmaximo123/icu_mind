@@ -42,6 +42,7 @@ const staticAssets = {
   '/remote-session.js': ['remote-session.js', 'text/javascript; charset=utf-8'],
   '/remote-ui.js': ['remote-ui.js', 'text/javascript; charset=utf-8'],
   '/clinical-engine.js': ['clinical-engine.js', 'text/javascript; charset=utf-8'],
+  '/engine-review.js': ['engine-review.js', 'text/javascript; charset=utf-8'],
   '/clinical-catalog.js': ['clinical-catalog.js', 'text/javascript; charset=utf-8'],
   '/remote-engine-ui.js': ['remote-engine-ui.js', 'text/javascript; charset=utf-8'],
   '/ui-bindings.js': ['ui-bindings.js', 'text/javascript; charset=utf-8'],
@@ -137,6 +138,12 @@ function createServer(store, { staticRoot, enableRemoteUI = false, rateLimits, o
       } else if (/^\/api\/encounters\/[^/]+\/close$/.test(path.pathname) && req.method === 'POST') {
         fields(await readBody(req,{allowEmpty:true}),[]);
         result = await store.closeEncounter(token, checkId(path.pathname.split('/')[3]));
+      } else if (path.pathname === '/api/engine/snapshot' && req.method === 'POST') {
+        const body=await readBody(req); fields(body,['unit_id','encounter_id','window_start','window_end']);
+        checkId(body.unit_id);checkId(body.encounter_id);
+        for(const key of ['window_start','window_end'])if(typeof body[key]!=='string'||!/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(body[key])||!Number.isFinite(Date.parse(body[key])))throw new ApiError(422,'Invalid interval');
+        if(Date.parse(body.window_start)>Date.parse(body.window_end)||Date.parse(body.window_end)-Date.parse(body.window_start)>31*86400000)throw new ApiError(422,'Invalid interval');
+        result=await store.engineSnapshot(token,{target_unit:body.unit_id,target_episode:body.encounter_id,window_start:body.window_start,window_end:body.window_end});
       } else if (path.pathname === '/api/observations' && req.method === 'GET') {
         result = await store.listObservations(token, checkId(path.searchParams.get('encounter_id')), page(path.searchParams, ['encounter_id']));
       } else if (path.pathname === '/api/observations/correct' && req.method === 'POST') {

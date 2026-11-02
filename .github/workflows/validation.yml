@@ -26,6 +26,9 @@ jobs:
       - run: node --check backend-client.js
       - run: node --check remote-session.js
       - run: node --check remote-ui.js
+      - run: node --check remote-engine-ui.js
+      - run: node --check engine-review.js
+      - run: node --check clinical-instruments.js
       - run: for f in server/*.js; do node --check "$f" || exit; done
   database:
     runs-on: ubuntu-latest

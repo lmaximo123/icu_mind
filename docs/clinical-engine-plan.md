@@ -7,16 +7,55 @@ independentes de desenvolvimento. Uma única execução trabalha nesta branch.
 
 | Ordem | Tarefa | Aceite e estado |
 | --- | --- | --- |
-| 1 | Inventariar e versionar instrumentos/fontes | `clinical-catalog.js`: seis candidatos, fonte e nível de verificação explícitos; apenas Cockcroft–Gault tem cálculo na nova engine |
+| 1 | Inventariar e versionar instrumentos/fontes | `clinical-catalog.js`: seis candidatos, fonte e nível de verificação explícitos; CG remoto, RASS/KDIGO parcial somente como núcleos isolados |
 | 2 | Aplicabilidade e cálculo isolados | Inclusão/exclusão/abstenção explicadas; casos sintéticos derivados independentemente da fórmula original; sem imputação nem probabilidades |
 | 3 | Prévia remota isolada | Seleção/revisão explícitas; autoria/IDs/unidades/horários; contexto validado pelo episódio autorizado; nenhuma escrita ou leitura de drafts; abstenção obrigatória enquanto faltam dados |
-| 4 | Resolver correções e cobertura | Próxima tarefa técnica: consulta autenticada, paginada e consistente de vínculos/eventos; nunca substituir silenciosamente seleção; cadeias/conflitos exigem revisão |
-| 5 | Entradas suplementares revisadas | Após 4: representar idade/coeficiente, exclusões, estabilidade e adequação de peso com autoria, instante, origem e confirmação próprias; não inferir de leito/notas |
-| 6 | SOFA original | Revisar tabela integral e regras temporais com fonte primária; casos independentes de fronteira; modelo de janela completa e suporte antes de habilitar cálculo remoto |
-| 7 | KDIGO/RASS | Refinar protocolo e inputs estruturados; testes temporais para AKI, avaliação explícita para RASS; sem inferência por texto livre |
-| 8 | Modelos probabilísticos | Apenas arquitetura de registro preparada; sem runtime/previsões. Desfecho/horizonte e artefato fixos, calibração, validação temporal/externa, monitoramento e rollback exigidos |
+| 4 | Resolver correções e cobertura | Implementado/testado: snapshot único sob RLS, limites explícitos e abstenção por truncamento; cadeias, conflitos, fontes fora da janela e resposta atrasada tratados sem substituição automática |
+| 5 | Entradas suplementares revisadas | Implementado/testado: idade/coeficiente, exclusões, estabilidade, peso e cobertura com autoria, instantes, origem e confirmação por item; CG numérico somente após revisão completa |
+| 6 | SOFA original | Bloqueio concreto: acesso disponível não contém tabela integral; obter texto primário legalmente e resolver regras antes de novo núcleo/remoto; ver especificações |
+| 7 | KDIGO/RASS | Núcleos isolados implementados/testados: RASS de exame explícito e KDIGO via creatinina parcial. Fronteira RASS 10 s e contrato de diurese/RRT pendentes; sem UI remota desses instrumentos |
+| 8 | Modelos probabilísticos | Preparação executável ampliada: diagnóstico de calibração/splits sintéticos, sem treino ou runtime. Estudos clínicos e autorização externa continuam ausentes; registry sempre desabilitado |
 
-## Evidências do incremento 1 — 2026-11-02
+Especificações, critérios e ações externas: [instrument-specifications.md](instrument-specifications.md).
+As etapas técnicas independentes acima foram executadas. O restante exige acesso
+primário do SOFA, decisões clínicas explícitas de protocolo/contrato ou estudos
+institucionais; não preencher essas lacunas por convenções inventadas.
+
+## Evidências atuais — continuidade de 2026-11-02
+
+- Migração `20261102224140_engine_snapshot.sql` aplicada após inspeção do projeto,
+  histórico e schema. Sete versões locais/remotas correspondem. Função STABLE,
+  invoker, search_path vazio, anon sem EXECUTE; RLS e MFA existentes preservados.
+- Antes da migração havia 44 eventos/37 episódios. Hash dos 44 eventos anteriores
+  permaneceu `467eafc1831d92f3a0fe63c432427338` após migração e testes. As quatro
+  unidades e duas exceções sintéticas continuam presentes. Registros novos de
+  teste foram mantidos; somente episódios/fatores/perfis próprios foram limpos.
+- Testes locais incluem correções lineares, ramos/ciclos, vínculo ausente, horário
+  deslocado, truncamento, suplemento não revisado/fora de contexto, sessão expirada
+  durante resposta, valores/unidades e origem inválidos. Nenhum assert foi relaxado.
+  Resultado final: **66 testes aprovados, zero falhos/ignorados**; build de 20 ativos
+  locais com inventário SHA-256 aprovado. A validação da matriz não libera dados reais.
+- SQL local e restauração exercitam anon, AAL1, AAL2, leitor sem escrita, contextos
+  cruzados, medição corrigida fora da janela, limite 1001/1000 e atributos da função.
+- Teste hospedado `test-hosted-protected.js` passou com chamadas diretas à RPC:
+  anônimo/AAL1/contexto cruzado negados, leitor/clínico/admin AAL2 autorizados;
+  correção, auditoria, encerramento e revogação existentes passaram novamente.
+- Chrome real passou com CG remoto sintético = 72 mL/min derivado independentemente,
+  cadeia de duas correções, seleção explícita da folha, oito suplementos rastreáveis,
+  exclusão por AKI, revisão invalidada ao alterar origem, descarte de resposta após
+  mudança de intervalo e falha de consulta. Regressões anteriores de login/MFA,
+  persistência/reload/novo login, isolamento, leitor, OCR/áudio e drafts passaram.
+- Núcleos novos: RASS cobre os dez ordinais e abstenção em 10 s; KDIGO reproduz
+  exemplos sintéticos A–E publicados e testa limites 48 h/7 dias, basal desconhecida,
+  creatinina cronicamente alta, unidades e contexto. Não há validação clínica/diurese/RRT.
+- Avaliação probabilística usa somente números artificiais fornecidos, sem previsão
+  clínica: Brier/confiabilidade por aritmética independente e testes de horizonte,
+  follow-up/censura e vazamento estrutural entre splits. Registry permanece desabilitado.
+- Restauração local repetida: preparação 6701 ms, snapshot 194 ms,
+  restauração/verificação 3255 ms, zero registros comprometidos antes da cópia
+  perdidos. Esses tempos não representam recuperação hospedada ou RPO/RTO clínico.
+
+## Evidências históricas do incremento 1 — 2026-11-02
 
 - `node --test tests/*.test.js`: 50 aprovados, zero falhos/ignorados. Inclui
   fórmula por aritmética independente, coeficiente feminino, aplicabilidade,
@@ -66,7 +105,7 @@ Não reexecutar suíte hospedada concorrente sobre fixtures compartilhadas.
   da UTI; não extrapolar para prognóstico validado na UTI. [RASS](https://pubmed.ncbi.nlm.nih.gov/12421743/)
   exige exame. [KDIGO](https://kdigo.org/wp-content/uploads/2016/10/KDIGO-2012-AKI-Guideline-English.pdf)
   exige basal/séries e intervalos. Nenhum algoritmo terapêutico habilitado.
-- D005: a consulta atual é página carregada, não janela completa. `started_at`
+- D005 (histórico, substituído por D007): a primeira consulta era página carregada, não janela completa. `started_at`
   não significa admissão à UTI. A prévia guarda contexto, revisor, versões e
   eventos em memória, invalida com mudança/refresh/expiração/erro/logout e nunca
   publica estimativa numérica remota com demografia ou correções pendentes.
@@ -78,6 +117,16 @@ Não reexecutar suíte hospedada concorrente sobre fixtures compartilhadas.
   drift/erros/calibração com governança, rollback para versão fixa ou abstenção.
   `model-registry.js` só verifica metadados e mantém tudo desabilitado. Sem treino
   real, aprendizado online ou aprovação por concordância entre modelos.
+- D007: leitura única limitada e consistente substitui composição de páginas de
+  instantes diferentes. Consultar todo o episódio evita perder correções que movam
+  medidas para fora do intervalo. Truncamento bloqueia; cobertura clínica exige
+  confirmação própria. Não há nova hipótese de identidade por leito.
+- D008: suplementos são entradas revisadas em memória, com ID/contexto/origem/tempos
+  por item; não viram observações persistidas nem auditoria clínica durável. Não
+  existe envio de drafts. Atualizações exigem nova consulta/revisão explícitas.
+- D009: avançar em RASS/KDIGO isolados e diagnóstico probabilístico sintético enquanto
+  SOFA original está bloqueado por acesso primário. Fronteiras/protocolos clínicos
+  não inferíveis permanecem explícitos em `instrument-specifications.md`.
 
 ## Bloqueios para dados reais
 

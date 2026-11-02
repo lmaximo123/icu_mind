@@ -23,6 +23,7 @@ sql < supabase/tests/bootstrap.sql
 for migration in supabase/migrations/*.sql; do sql < "$migration"; done
 sql < supabase/tests/security.sql
 sql < supabase/tests/advanced-security.sql
+sql < supabase/tests/engine-snapshot.sql
 sql < supabase/tests/durability.sql
 docker_local restart "$container" >/dev/null
 ready=false

@@ -19,17 +19,17 @@ const entries=[{...engine.catalog,status:'synthetic-calculator',sourceVerificati
  purpose:'Sinalizar risco de desfechos desfavoráveis em adultos com suspeita de infecção fora da UTI; não diagnostica sepse.',population:'Adultos fora da UTI com suspeita de infecção.',
  inputs:{respiratoryRate:'/min',sbp:'mmHg',alteredMentation:'avaliação clínica explícita'},
  exclusions:['Uso como prognóstico validado na UTI','Uso isolado para excluir sepse'],window:'Avaliação clínica; sem probabilidade individual ou horizonte arbitrário.'},
- {id:'rass',version:'2002-candidate.1',category:'clinical-assessment',status:'specification-pending',
- source:'https://pubmed.ncbi.nlm.nih.gov/12421743/',sourceVerification:'bibliography-and-population-verified',verified:'2026-11-02',
+ {id:'rass',version:'2003-table1-osler.1',category:'clinical-assessment',status:'synthetic-core-only',
+ source:'https://jamanetwork.com/journals/jama/fullarticle/196696',sourceVerification:'primary-table1-and-sequence-verified',verified:'2026-11-02',
  purpose:'Avaliar agitação/sedação; não inferir de áudio ou texto livre.',population:'Adultos em UTI.',
- inputs:{examination:'respostas observadas à voz/estímulo, protocolo completo por revisar'},
- exclusions:['Avaliação ausente não equivale a alerta/calmo'],window:'Exame atual; repetição gera nova avaliação.'},
- {id:'kdigo-aki',version:'2012-candidate.1',category:'diagnostic-support',status:'specification-pending',
- source:'https://kdigo.org/wp-content/uploads/2016/10/KDIGO-2012-AKI-Guideline-English.pdf',sourceVerification:'guideline-criteria-located',verified:'2026-11-02',
+ inputs:{spontaneous:'categoria observada antes de estímulo',voice:'resposta à voz',eyeContactSeconds:'segundos',physical:'resposta física se etapa anterior ausente'},
+ exclusions:['Avaliação ausente não equivale a alerta/calmo','Exatamente 10 s: abstenção até esclarecer protocolo'],window:'Exame atual; repetição gera nova avaliação. Núcleo isolado, sem UI clínica remota habilitada.'},
+ {id:'kdigo-aki',version:'2012-creatinine-path-osler.1',category:'diagnostic-support',status:'synthetic-partial-core-only',
+ source:'https://kdigo.org/wp-content/uploads/2016/10/KDIGO-2012-AKI-Guideline-English.pdf',sourceVerification:'primary-table2-and-table10-cases-A-E-verified',verified:'2026-11-02',
  purpose:'Apoiar definição/estadiamento de lesão renal aguda; não indicar terapia automaticamente.',population:'População e critérios etários da diretriz exigem seleção explícita.',
  inputs:{creatinine:'mg/dL, basal e seriada',urine:'mL/kg/h com intervalo',rrt:'início explícito'},
- exclusions:['Basal desconhecida não deve ser inventada','Cobertura incompleta da diurese'],window:'48 h/7 dias e duração da oligúria; sem motor temporal implementado.'}];
+ exclusions:['Basal desconhecida não deve ser inventada','Cobertura incompleta da diurese','Núcleo somente adulto e via creatinina, sem estágio global'],window:'Aumento de creatinina em 48 h e razão para basal explícita em 7 dias; diurese/RRT não avaliadas.'}];
 function freeze(value){Object.values(value).forEach(v=>{if(v&&typeof v==='object')freeze(v);});return Object.freeze(value);}
-const api=freeze({schemaVersion:1,version:'1.0.0',entries});
+const api=freeze({schemaVersion:1,version:'1.1.0',entries});
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.OslerClinicalCatalog=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

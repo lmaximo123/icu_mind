@@ -54,6 +54,6 @@ function createLimiter({ now = Date.now, loginLimit = 20, readLimit = 600, write
 }
 function routeLabel(pathname) {
   if (/^\/api\/encounters\/[^/]+\/close$/.test(pathname)) return '/api/encounters/:id/close';
-  return ['/api/auth/login','/api/auth/logout','/api/auth/refresh','/api/auth/mfa','/api/auth/config','/api/units','/api/encounters','/api/observations','/api/observations/correct'].includes(pathname) ? pathname : 'other';
+  return ['/api/auth/login','/api/auth/logout','/api/auth/refresh','/api/auth/mfa','/api/auth/config','/api/units','/api/encounters','/api/observations','/api/observations/correct','/api/engine/snapshot'].includes(pathname) ? pathname : 'other';
 }
 module.exports = { securityHeaders, checkOrigin, page, createLimiter, routeLabel };

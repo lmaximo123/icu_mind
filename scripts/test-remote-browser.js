@@ -42,8 +42,14 @@ async function main() {
     assert.equal(response.status,200);
     return generate({secret:ownFactorSecret,epoch:Math.floor(Date.parse(response.headers.get('date'))/1000)});
   }
-  let writes = 0, loseResponse = true;
+  let writes = 0, loseResponse = true, delaySnapshot=false, snapshotStarted=false, releaseSnapshot, failSnapshot=false;
   const wrappedStore = { ...store,
+    engineSnapshot:async(...args)=>{
+      if(failSnapshot)throw new ApiError(503,'Synthetic snapshot outage');
+      const result=await store.engineSnapshot(...args);
+      if(delaySnapshot){snapshotStarted=true;await new Promise(resolve=>{releaseSnapshot=resolve;setTimeout(resolve,10000).unref();});}
+      return result;
+    },
     signIn: async (...args) => {
       const session = await store.signIn(...args);
       sessionTokens.add(session.access_token); sessionsByEmail.set(session.user.email, session.access_token); return session;
@@ -125,7 +131,7 @@ async function main() {
     assert.ok(activeUser);
     // Reuse the session created by this user's real UI login, in memory only.
     // The CDP expression and response bodies are never logged.
-    assert.ok(endpoint.startsWith('/api/encounters') || endpoint.startsWith('/api/observations'));
+    assert.ok(endpoint.startsWith('/api/encounters') || endpoint.startsWith('/api/observations') || endpoint==='/api/engine/snapshot');
     const init = { method, credentials: 'omit', cache: 'no-store', redirect: 'error',
       headers: { Authorization: `Bearer ${sessionsByEmail.get(activeUser.email)}`, 'Content-Type': 'application/json' },
       ...(body ? { body: JSON.stringify(body) } : {}) };
@@ -296,6 +302,14 @@ async function main() {
     assert.equal(historyBeforeReload.length, 2);
     stage = 'browser isolated engine preview and explicit review';
     assert.equal(await evaluate(`document.getElementById('engine-catalog').children.length`),6);
+    assert.equal(await evaluate(`document.getElementById('engine-preview').disabled`),true);
+    const episodeInfo=(await browserApi('/api/encounters?unit_id='+fixtures.unitA)).body.find(e=>e.id===encounterId);
+    const localDate=iso=>{const date=new Date(iso);return new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,23);};
+    // Round upward so millisecond input cannot precede the database microsecond start.
+    await change('engine-start',localDate(new Date(Math.ceil(Date.parse(episodeInfo.started_at)/1000)*1000).toISOString()));
+    await change('engine-end',localDate(new Date().toISOString()));
+    await click('engine-load');
+    await waitFor(`!document.getElementById('engine-preview').disabled`);
     assert.equal(await evaluate(`document.querySelectorAll('#engine-candidates input:checked').length`),0);
     await click('engine-preview');
     assert.ok(await evaluate(`document.getElementById('engine-result').textContent.includes('recusada')`));
@@ -303,8 +317,8 @@ async function main() {
     await click('engine-preview');
     const preview=JSON.parse(await evaluate(`document.getElementById('engine-result').textContent`));
     assert.equal(preview.result.status,'abstained');assert.equal(preview.result.estimate,undefined);
-    assert.equal(preview.provenance.unitId,fixtures.unitA);assert.equal(preview.provenance.encounterId,encounterId);
-    assert.ok(beforeReload.body.some(e=>e.id===preview.provenance.events[0].id));
+    assert.equal(preview.provenance.context.unitId,fixtures.unitA);assert.equal(preview.provenance.context.encounterId,encounterId);
+    assert.ok(beforeReload.body.some(e=>e.id===preview.provenance.events[0].event.id));
     assert.equal(writes,3);checkDrafts(await localDrafts(),draftsBefore);
     await click('remote-refresh');
     await waitFor(`!document.getElementById('remote-refresh').disabled`);
@@ -395,6 +409,65 @@ async function main() {
     assert.equal(await evaluate(`document.getElementById('remote-user').textContent`), '');
     assert.equal(await evaluate(`localStorage.length + sessionStorage.length`), 0);
     console.log('PASS: both owners confirm unchanged records and close only their new episodes; local IndexedDB drafts remain unchanged.');
+    stage='browser full reviewed engine assessment with correction chain';
+    await login(users[1]);await selectUnit(fixtures.unitA);
+    await change('remote-bed','988');await click('remote-create-button');
+    await waitFor(`document.getElementById('remote-status').textContent.includes('Novo episódio confirmado')`);
+    const engineEpisode=await evaluate(`document.getElementById('remote-encounter').value`);
+    await change('remote-concept','weight');await saveReviewed('72');
+    await change('remote-concept','creatinine');await saveReviewed('1');
+    const engineEvents=(await browserApi('/api/observations?encounter_id='+engineEpisode)).body;
+    const originalCr=engineEvents.find(e=>e.concept==='creatinine'),weightEvent=engineEvents.find(e=>e.concept==='weight');
+    const fix1={original_event_id:originalCr.id,id:randomUUID(),value:2,unit:'mg/dL',timestamp:originalCr.measured_at,reason_code:'measurement'};
+    const fix2={...fix1,original_event_id:fix1.id,id:randomUUID(),value:1};
+    assert.equal((await browserApi('/api/observations/correct','POST',fix1)).status,200);
+    assert.equal((await browserApi('/api/observations/correct','POST',fix2)).status,200);
+    const engineInfo=(await browserApi('/api/encounters?unit_id='+fixtures.unitA)).body.find(e=>e.id===engineEpisode);
+    await until(()=>Date.now()>Math.max(...engineEvents.map(e=>Date.parse(e.measured_at)))+10);
+    const windowEnd=new Date().toISOString();
+    await change('engine-start',localDate(new Date(Math.ceil(Date.parse(engineInfo.started_at)/1000)*1000).toISOString()));
+    await change('engine-end',localDate(windowEnd));await click('engine-load');
+    await waitFor(`!document.getElementById('engine-preview').disabled`);
+    assert.equal(await evaluate(`document.querySelectorAll('#engine-candidates input:checked').length`),0);
+    assert.equal(await evaluate(`document.querySelector('#engine-candidates input[value="${originalCr.id}"]').disabled`),true);
+    assert.equal(await evaluate(`document.querySelector('#engine-candidates input[value="${fix1.id}"]').disabled`),true);
+    await evaluate(`document.querySelector('#engine-candidates input[value="${fix2.id}"]').click();document.querySelector('#engine-candidates input[value="${weightEvent.id}"]').click()`);
+    await change('engine-source','synthetic-browser-assessment');await change('engine-effective',localDate(originalCr.measured_at));
+    for(const [field,value] of Object.entries({age:'68',sex:'male',acuteKidney:'false',dialysis:'false',representativeWeight:'true',stableRenal:'true',temporalCompatibility:'true',clinicalCoverage:'true'})){
+      await change('engine-supp-'+field,value);await click('engine-reviewed-'+field);
+    }
+    await evaluate(`document.getElementById('engine-confirm').checked=true`);await click('engine-preview');
+    const assessment=JSON.parse(await evaluate(`document.getElementById('engine-result').textContent`));
+    assert.equal(assessment.result.status,'included');assert.equal(assessment.result.estimate.value,72);
+    assert.equal(assessment.provenance.supplements.length,8);assert.equal(assessment.provenance.corrections.length,2);
+    assert.equal(assessment.provenance.context.encounterId,engineEpisode);
+    assert.deepEqual(assessment.provenance.events.find(e=>e.event.id===fix2.id).lineage,[originalCr.id,fix1.id]);
+    await change('engine-source','synthetic-browser-reassessment');
+    assert.equal(await evaluate(`document.getElementById('engine-reviewed-age').checked`),false);
+    assert.equal(await evaluate(`document.getElementById('engine-confirm').checked`),false);
+    for(const field of ['age','sex','acuteKidney','dialysis','representativeWeight','stableRenal','temporalCompatibility','clinicalCoverage'])await click('engine-reviewed-'+field);
+    await change('engine-supp-acuteKidney','true');assert.equal(await evaluate(`document.getElementById('engine-reviewed-acuteKidney').checked`),false);
+    await click('engine-reviewed-acuteKidney');await evaluate(`document.getElementById('engine-confirm').checked=true`);await click('engine-preview');
+    const excluded=JSON.parse(await evaluate(`document.getElementById('engine-result').textContent`));assert.equal(excluded.result.status,'excluded');assert.equal(excluded.result.estimate,undefined);
+    const unchanged=(await browserApi('/api/observations?encounter_id='+engineEpisode)).body.find(e=>e.id===originalCr.id);assert.deepEqual(unchanged,originalCr);
+    stage='browser snapshot response race and provider outage';
+    delaySnapshot=true;snapshotStarted=false;await click('engine-load');await until(()=>snapshotStarted);
+    await change('engine-end',localDate(new Date(Date.parse(windowEnd)-1).toISOString()));releaseSnapshot();delaySnapshot=false;
+    await waitFor(`!document.getElementById('remote-refresh').disabled`);
+    await waitFor(`document.getElementById('engine-result').textContent.includes('Consulta recusada')`);
+    assert.equal(await evaluate(`document.getElementById('engine-preview').disabled`),true);
+    assert.equal(await evaluate(`document.querySelectorAll('#engine-candidates input').length`),0);
+    await change('engine-end',localDate(windowEnd));failSnapshot=true;await click('engine-load');
+    await waitFor(`document.getElementById('remote-status').className.includes('amber') && !document.getElementById('remote-refresh').disabled`);failSnapshot=false;
+    assert.equal(await evaluate(`document.getElementById('engine-preview').disabled`),true);
+    assert.equal(await evaluate(`document.getElementById('engine-load').disabled`),false);
+    await click('engine-load');await waitFor(`!document.getElementById('engine-preview').disabled`);
+    assert.equal(await evaluate(`document.querySelectorAll('#engine-candidates input:checked').length`),0);
+    checkDrafts(await localDrafts(),draftsBefore);
+    await click('remote-close');await waitFor(`document.getElementById('remote-status').textContent.includes('Encerramento confirmado')`);
+    await logout();assert.equal(await evaluate(`document.getElementById('engine-source').value`),'');
+    assert.equal(await evaluate(`document.getElementById('engine-start').value`),'');
+    console.log('PASS: real remote CG uses explicitly selected correction leaf and eight traceable reviewed supplements; AKI excludes, originals/drafts remain unchanged and logout clears supplemental context.');
   } finally {
     // Only close episodes generated by this invocation; retain immutable events.
     const cleanup = await Promise.allSettled(created.map(row => store.closeEncounter(row.token, row.id)));

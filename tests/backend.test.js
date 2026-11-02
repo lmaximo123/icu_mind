@@ -36,11 +36,19 @@ test('API requires a verified session and disables response caching', async t =>
   assert.equal(response.headers.get('access-control-allow-origin'), null);
   assert.equal((await call('/api/encounters?unit_id=' + id, undefined, { Authorization: 'Bearer expired' })).status, 401);
 });
+test('engine snapshot is authenticated, strictly scoped and schema-validated without writes',async t=>{
+ const calls=[];const {call}=await fixture(t,{engineSnapshot:async(token,body)=>{calls.push({token,body});return {complete:true};}});
+ const body={unit_id:id,encounter_id:id,window_start:'2026-01-01T00:00:00Z',window_end:'2026-01-02T00:00:00Z'};
+ assert.equal((await call('/api/engine/snapshot',body,{Authorization:''})).status,401);
+ for(const invalid of [{...body,user_id:id},{...body,window_end:'2026-01-01'},{...body,window_end:'2026-03-01T00:00:00Z'},{...body,unit_id:'bad'}])assert.ok([400,422].includes((await call('/api/engine/snapshot',invalid)).status));
+ const response=await call('/api/engine/snapshot',body);assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');
+ assert.equal(calls.length,1);assert.equal(calls[0].body.target_unit,id);assert.equal(calls[0].token,'synthetic.session');
+});
 test('development server serves existing app assets under one origin and hides private files', async t => {
   const { base } = await fixture(t, {}, { staticRoot: require('node:path').resolve(__dirname, '..') });
   const page = await fetch(base + '/');
   assert.equal(page.status, 200); assert.match(await page.text(), /Osler \|/);
-  for (const file of ['app.js', 'score-ui.js', 'clinical-scores.js', 'osler-validation.js', 'osler-logo.svg', 'backend-client.js', 'remote-session.js', 'remote-ui.js', 'clinical-engine.js', 'remote-engine-ui.js']) {
+  for (const file of ['app.js', 'score-ui.js', 'clinical-scores.js', 'osler-validation.js', 'osler-logo.svg', 'backend-client.js', 'remote-session.js', 'remote-ui.js', 'clinical-engine.js', 'remote-engine-ui.js', 'engine-review.js']) {
     const asset = await fetch(base + '/' + file);
     assert.equal(asset.status, 200); assert.ok((await asset.text()).length > 0);
   }

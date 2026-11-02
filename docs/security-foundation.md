@@ -9,6 +9,10 @@ clínica, conformidade LGPD ou autorização para dados reais.
 Prioridade de desenvolvimento: [engine clínica sintética](clinical-engine-plan.md)
 e controles técnicos necessários à integração. Os bloqueios externos abaixo
 impedem dados reais, mas não suspendem tarefas independentes da engine.
+Na continuidade, a migração aditiva `20261102224140_engine_snapshot.sql` foi aplicada
+e validada sob RLS/MFA sem alterar políticas existentes. Sete migrações locais
+correspondem ao histórico remoto. A prévia CG usa suplementos revisados em memória;
+isso não equivale a persistência/auditoria durável de decisões clínicas.
 
 Esta matriz prevalece sobre os relatos históricos abaixo. **Comprovado** significa
 teste executado no escopo sintético indicado; não certifica uso clínico.

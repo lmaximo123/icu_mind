@@ -70,6 +70,20 @@
     }
     return {
       getState: snapshot,
+      async loadEngineSnapshot(interval) {
+        let result;
+        await run(async()=>{
+          requireSession();requireResolved();
+          const episode=selected(),userId=state.user?.id;
+          if(!episode)throw new Error('Explicit episode required');
+          result=await api.engineSnapshot({unit_id:state.unitId,encounter_id:state.encounterId,window_start:interval.window_start,window_end:interval.window_end});
+          if(now()>=expiry)expire();
+          requireSession();
+          if(state.user?.id!==userId||selected()?.id!==episode.id||result.unit_id!==episode.unit_id||result.encounter?.id!==episode.id||result.reviewer_id!==userId)throw new Error('Context changed');
+          state.message='Consulta consistente preparada; revise intervalo, eventos e entradas suplementares.';
+        });
+        return result;
+      },
       login: (email, password) => run(async () => {
         const session = await auth('login', { email, password });
         if (!session.access_token || !session.user?.id || !Number.isFinite(session.expires_in) || session.expires_in <= 0) throw new Error('Invalid session');

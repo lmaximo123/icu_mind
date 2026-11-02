@@ -116,6 +116,7 @@
     }
   ],
   "proven_synthetic_controls": [
+    { "id": "engine_snapshot_and_review", "evidence": ["tests/engine-review.test.js", "tests/engine-session.test.js", "supabase/tests/engine-snapshot.sql", "scripts/test-remote-browser.js"] },
     { "id": "closed_signup", "evidence": ["scripts/test-hosted.js"] },
     { "id": "protected_unit_aal2_and_session", "evidence": ["scripts/test-hosted-protected.js", "supabase/migrations/20261102142059_security_audit_mfa_corrections.sql"] },
     { "id": "unit_episode_role_isolation", "evidence": ["scripts/test-hosted-protected.js", "scripts/test-remote-browser.js"] },

@@ -3,8 +3,8 @@
 Status: primeiro incremento autorizado pela solicitação de evolução da engine;
 implementação e limites registrados em [clinical-engine-plan.md](clinical-engine-plan.md).
 O corpo abaixo preserva a proposta histórica. A decisão vigente usa cálculo novo
-isolado e versionado; não chama o motor legado nem libera números remotos enquanto
-faltam demografia, aplicabilidade e resolução de correções.
+isolado e versionado; não chama o motor legado. CG numérico sintético exige snapshot
+consistente, correções resolvidas e revisão de todas as entradas necessárias.
 Escopo: branch `develop/osler-secure-foundation`, projeto de desenvolvimento
 `otnwkxchugsovtjdanyu`, contas e dados exclusivamente sintéticos.
 

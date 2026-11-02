@@ -64,6 +64,7 @@ async function main(){
    user.existingFactors=((await info.json()).factors || []).map(f=>f.id).sort();
   }
   const [reader,clinician,admin]=users;
+  const initialTokens=users.map(user=>user.token);
   stage='AAL1 denied by database, regardless of role';
   for(const user of users){
    const permission=await rest(user,'rpc/can_access_unit','POST',{target_unit:fixture.unitP,write_access:false});
@@ -79,6 +80,10 @@ async function main(){
   console.log('PASS: invalid MFA codes rejected; all three official AAL2 sessions access their authorized protected unit.');
   stage='protected writes and correction provenance';
   const epP=await create(clinician,fixture.unitP),epQ=await create(admin,fixture.unitQ);
+  const snapshotArgs={target_unit:fixture.unitP,target_episode:epP.id,window_start:epP.started_at,window_end:new Date(Math.ceil(Date.parse(epP.started_at)/1000)*1000).toISOString()};
+  while(Date.now()<Date.parse(snapshotArgs.window_end)+50)await new Promise(resolve=>setTimeout(resolve,50));
+  assert.equal((await rest(null,'rpc/engine_snapshot','POST',snapshotArgs)).status,401);
+  for(const token of initialTokens)assert.equal((await rest({token},'rpc/engine_snapshot','POST',snapshotArgs)).status,403);
   const event={id:randomUUID(),encounter_id:epP.id,concept:'ph',value:7.4,unit:'',timestamp:observationTimestamp(epP.started_at),confirmed:true,source_type:'manual'};
   const saved=await api(clinician,'/api/observations','POST',event);assert.equal(saved.status,200);assert.equal(saved.body.recorded_by,clinician.id);
   const eventQ={...event,id:randomUUID(),encounter_id:epQ.id,timestamp:observationTimestamp(epQ.started_at)};
@@ -95,6 +100,16 @@ async function main(){
   assert.equal((await api(clinician,'/api/observations/correct','POST',{...correction,id:randomUUID(),original_event_id:eventQ.id})).status,403);
   assert.equal((await rest(reader,'observation_corrections','POST',link.body[0])).status,403);
   assert.equal((await rest(clinician,`observation_corrections?replacement_event_id=eq.${correction.id}`,'PATCH',{reason_code:'other'})).status,403);
+  snapshotArgs.window_end=new Date(Math.max(Date.now()-1000,Date.parse(event.timestamp))).toISOString();
+  while(Date.now()<Date.parse(snapshotArgs.window_end)+50)await new Promise(resolve=>setTimeout(resolve,50));
+  for(const user of users){
+   const snap=await rest(user,'rpc/engine_snapshot','POST',snapshotArgs);assert.equal(snap.status,200);assert.equal(snap.body.complete,true);
+   assert.equal(snap.body.event_count,2);assert.equal(snap.body.correction_count,1);assert.equal(snap.body.reviewer_id,user.id);
+   assert.ok(snap.body.corrections.some(c=>c.replacement_event_id===correction.id));
+  }
+  assert.equal((await rest(clinician,'rpc/engine_snapshot','POST',{...snapshotArgs,target_unit:fixture.unitQ,target_episode:epQ.id})).status,403);
+  assert.equal((await rest(clinician,'rpc/engine_snapshot','POST',{...snapshotArgs,target_unit:fixture.unitQ})).status,403);
+  console.log('PASS: snapshot RPC denies anonymous/AAL1/cross-context callers; authorized AAL2 reader/clinician/admin see the same complete events and corrections under RLS.');
   console.log('PASS: append-only correction preserves the original, binds author/reason and link, retries identically and rejects reader/cross-unit/direct mutation.');
   stage='audit isolation, metadata minimization and no access escalation';
   for(const user of [reader,clinician])assert.equal((await rest(user,'rpc/audit_unit','POST',{target_unit:fixture.unitP})).status,403);

@@ -27,9 +27,11 @@
   }
   function dateLabel(value) { return new Date(value).toLocaleString('pt-BR'); }
   let context = '', savedId = '';
+  let engineUI;
   const controller = OslerRemote.createController({ onChange: render });
+  engineUI=OslerRemoteEngineUI.create({loadSnapshot:interval=>controller.loadEngineSnapshot(interval)});
   function render(state) {
-    window.dispatchEvent(new CustomEvent('osler-remote-state', { detail: state }));
+    engineUI?.render(state);
     const connected = !!state.user && !state.expired;
     const pending = !!(state.pending || state.pendingEncounter);
     const episode = state.encounters.find(row => row.id === state.encounterId);

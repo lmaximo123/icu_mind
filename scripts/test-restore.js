@@ -15,6 +15,7 @@ async function main() {
     for (const file of (await fs.readdir('supabase/migrations')).filter(file => file.endsWith('.sql')).sort()) await db.exec(await fs.readFile('supabase/migrations/' + file,'utf8'));
     await db.exec(clean(await fs.readFile('supabase/tests/security.sql','utf8')));
     await db.exec(clean(await fs.readFile('supabase/tests/advanced-security.sql','utf8')));
+    await db.exec(clean(await fs.readFile('supabase/tests/engine-snapshot.sql','utf8')));
     await db.exec(clean(await fs.readFile('supabase/tests/durability.sql','utf8')));
     await db.exec('reset role');
     const committed = performance.now();

@@ -27,6 +27,7 @@
       createEncounter: encounter => request('/api/encounters', 'POST', encounter),
       closeEncounter: id => request(`/api/encounters/${encodeURIComponent(id)}/close`, 'POST'),
       listObservations: (encounterId,page) => request(`/api/observations?encounter_id=${encodeURIComponent(encounterId)}`+(paging(page)?'&'+paging(page):'')),
+      engineSnapshot: body => request('/api/engine/snapshot','POST',body),
       correctObservation: correction => request('/api/observations/correct','POST',correction),
       // Generate and retain observation.id before the first attempt. Reuse that
       // exact ID and payload when retrying. Never silently fall back to local save.
