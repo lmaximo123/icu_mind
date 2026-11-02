@@ -54,6 +54,14 @@ institucionais; não preencher essas lacunas por convenções inventadas.
 - Restauração local repetida: preparação 6701 ms, snapshot 194 ms,
   restauração/verificação 3255 ms, zero registros comprometidos antes da cópia
   perdidos. Esses tempos não representam recuperação hospedada ou RPO/RTO clínico.
+- CI do commit de implementação `8cf7851512a3920da19cac891bc973cad08421f8`:
+  jobs `test` e `database` concluídos com sucesso na
+  [execução 41541365643](https://github.com/lmaximo123/icu_mind/actions/runs/41541365643).
+  Inclui npm ci/build/audit, secret check, 66 testes, restauração local e PostgreSQL
+  17 nativo com todas as migrações, testes de snapshot/RLS e persistência após restart.
+  Não é restauração hospedada nem validação clínica. A execução paralela automática
+  do provedor de CI não representa segunda sessão de desenvolvimento sobre o banco
+  hospedado: esses jobs usam somente bancos locais descartáveis isolados.
 
 ## Evidências históricas do incremento 1 — 2026-11-02
 
